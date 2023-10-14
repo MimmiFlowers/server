@@ -26,26 +26,26 @@ def favorite_info():
         {
             "name": "Favorite Bouqet 1",
             "description": "This description is for bouqet 1",
-            "picture": "https://i.imgur.com/0NCCt4A.png",
-            "price": "11.11"
+            "picture": "https://i.imgur.com/ScOiPDx.jpg",
+            "price": "1111"
         },
         {
             "name": "Favorite Bouqet 2",
             "description": "This description is for bouqet 2",
-            "picture": "https://i.imgur.com/0NCCt4A.png",
-            "price": "22.22"
+            "picture": "https://i.imgur.com/RgtoxyG.jpg",
+            "price": "2222"
         },
         {
             "name": "Favorite Bouqet 3",
             "description": "This description is for bouqet 3",
-            "picture": "https://i.imgur.com/0NCCt4A.png",
-            "price": "33.33"
+            "picture": "https://i.imgur.com/hMmLLC2.jpg",
+            "price": "3333"
         },
         {
             "name": "Favorite Bouqet 4",
             "description": "This description is for bouqet 4",
-            "picture": "https://i.imgur.com/0NCCt4A.png",
-            "price": "44.44"
+            "picture": "https://i.imgur.com/TAPsYEH.jpg",
+            "price": "4444"
         }
     ]
 }
@@ -58,26 +58,26 @@ def season_info():
         {
             "name": "Season Bouqet 1",
             "description": "This description is for bouqet 1",
-            "picture": "https://i.imgur.com/0NCCt4A.png",
-            "price": "11.11"
+            "picture": "https://i.imgur.com/HnNqj2k.jpg",
+            "price": "1111"
         },
         {
             "name": "Season Bouqet 2",
             "description": "This description is for bouqet 2",
-            "picture": "https://i.imgur.com/0NCCt4A.png",
-            "price": "22.22"
+            "picture": "https://i.imgur.com/EwKcxnl.jpg",
+            "price": "2222"
         },
         {
             "name": "Season Bouqet 3",
             "description": "This description is for bouqet 3",
-            "picture": "https://i.imgur.com/0NCCt4A.png",
-            "price": "33.33"
+            "picture": "https://i.imgur.com/5PMLpcl.jpg",
+            "price": "3333"
         },
         {
             "name": "Season Bouqet 4",
             "description": "This description is for bouqet 4",
-            "picture": "https://i.imgur.com/0NCCt4A.png",
-            "price": "44.44"
+            "picture": "https://i.imgur.com/vbSwDFa.jpg",
+            "price": "4444"
         }
     ]
 }
