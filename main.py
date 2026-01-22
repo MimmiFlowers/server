@@ -23,7 +23,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.mount("/assets", StaticFiles(directory="assets"), name="assets")
+# app.mount("/assets", StaticFiles(directory="assets"), name="assets")
 
 @app.get('/collections')
 async def get_collections():
