@@ -6,7 +6,6 @@ from routers import data_routes, stripe_routes
 app = FastAPI()
 
 origins = [
-    "*",
     "http://localhost",
     "http://localhost:8500",
     "http://localhost:3000",
