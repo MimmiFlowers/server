@@ -11,11 +11,13 @@ else:
 
 # load_dotenv()
 
-connection_creds = "dbname=" + os.getenv("DB_NAME") + \
-                   " user=" + os.getenv("DB_USER") + \
-                   " password=" + os.getenv("DB_PASSWORD") + \
-                   " host=" + os.getenv("DB_HOST") + \
-                   " port=" + os.getenv("DB_PORT")
+# connection_creds = "dbname=" + os.getenv("DB_NAME") + \
+#                    " user=" + os.getenv("DB_USER") + \
+#                    " password=" + os.getenv("DB_PASSWORD") + \
+#                    " host=" + os.getenv("DB_HOST") + \
+#                    " port=" + os.getenv("DB_PORT")
+
+connection_creds = os.getenv("DB_URL")
 
 async def get_db_connection():
     try:

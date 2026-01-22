@@ -10,7 +10,7 @@ ENV = os.environ.get("ENV", "dev")
 if ENV == "dev":
     load_dotenv(".env.dev")
 else:
-    load_dotenv(".env.prod")
+    load_dotenv(".env.stg")
 
 router = APIRouter(
     prefix="/stripe",
@@ -42,8 +42,8 @@ async def create_checkout_session(data: CheckoutRequest):
                 }
                 for item in data.items
             ],
-            success_url="http://localhost:5173/Success/" + data.orderData.orderID,
-            cancel_url="http://localhost:5173/Cancel/" + data.orderData.orderID,
+            success_url=os.getenv("SUCCESS_URL") + data.orderData.orderID,
+            cancel_url=os.getenv("CANCEL_URL") + data.orderData.orderID,
         )
         return {"session": session}
     except Exception as e:

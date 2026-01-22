@@ -11,7 +11,9 @@ origins = [
     "http://localhost:8500",
     "http://localhost:3000",
     "http://localhost:5173",
-    "https://imgur.com"
+    "https://imgur.com",
+    "https://i.imgur.com",
+    "http://stg.mimmiflowers.se",
 ]
 
 app.add_middleware(
