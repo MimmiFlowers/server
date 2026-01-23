@@ -1,7 +1,7 @@
 import os, stripe
 from dotenv import load_dotenv
 from routers.classes.classes import CheckoutRequest
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Depends
 from database.dbconfig.dbconfig import get_db_connection
 from database.orders import insert_order, update_order_status
 
@@ -18,12 +18,12 @@ router = APIRouter(
     responses={404: {"description": "Not found"}}
 )
 
-conn = get_db_connection()
+# conn = get_db_connection()
 
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 
 @router.post("/create_checkout_session")
-async def create_checkout_session(data: CheckoutRequest):
+async def create_checkout_session(data: CheckoutRequest, conn=Depends(get_db_connection)):
     try:
         await insert_order(conn, data.orderData, status="pending")
 
@@ -51,7 +51,7 @@ async def create_checkout_session(data: CheckoutRequest):
 
 
 @router.post("/webhook/session_completed")
-async def stripe_webhook(request: Request):
+async def stripe_webhook(request: Request, conn=Depends(get_db_connection)):
     payload = await request.body()
     sig_header = request.headers.get('stripe-signature')
     webhook_secret = os.getenv("STRIPE_WEBHOOK_SECRET")
