@@ -1,0 +1,22 @@
+name: Deploy STG
+
+on:
+  push:
+    branches:
+      - staging
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Deploy to EC2 (STG)
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.STG_EC2_HOST }}
+          username: ${{ secrets.STG_EC2_USER }}
+          key: ${{ secrets.STG_EC2_SSH_KEY }}
+          script: |
+            cd /opt/stg/backend
+            git pull origin stg
+            docker compose --env-file .env.stg up -d --build backend
