@@ -12,7 +12,7 @@ origins = [
     "http://localhost:5173",
     "https://imgur.com",
     "https://i.imgur.com",
-    "http://stg.mimmiflowers.se",
+    "https://stg.mimmiflowers.se",
 ]
 
 app.add_middleware(
