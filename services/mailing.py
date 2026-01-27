@@ -3,6 +3,7 @@ from dotenv import load_dotenv
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
+from email.utils import formataddr
 # from email import encoders
 
 ENV = os.environ.get("ENV", "dev")
@@ -17,6 +18,7 @@ def send_order_confirmation(to_email: str, order_id: str):
     smtp_port = int(os.getenv("ZOHO_SMTP_PORT"))
     smtp_user = os.getenv("ZOHO_SMTP_USER")
     smtp_password = os.getenv("ZOHO_SMTP_PASSWORD")
+    smtp_sender_name = os.getenv("ZOHO_SMTP_SENDER_NAME")
 
     from_email = smtp_user
 
@@ -30,7 +32,7 @@ def send_order_confirmation(to_email: str, order_id: str):
         Mimmi Flowers Team
     """
     msg = MIMEMultipart()
-    msg['From'] = from_email
+    msg['From'] = formataddr((smtp_sender_name, from_email))
     msg['To'] = to_email
     msg['Subject'] = subject
     msg.attach(MIMEText(body, 'plain'))
