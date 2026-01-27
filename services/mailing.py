@@ -13,10 +13,10 @@ else:
     load_dotenv(".env.stg")
 
 def send_order_confirmation(to_email: str, order_id: str):
-    smtp_server = os.getenv("ZOHO_SMPT_HOST")
-    smtp_port = int(os.getenv("ZOHO_SMPT_PORT"))
-    smtp_user = os.getenv("ZOHO_SMPT_USER")
-    smtp_password = os.getenv("ZOHO_SMPT_PASSWORD")
+    smtp_server = os.getenv("ZOHO_SMTP_HOST")
+    smtp_port = int(os.getenv("ZOHO_SMTP_PORT"))
+    smtp_user = os.getenv("ZOHO_SMTP_USER")
+    smtp_password = os.getenv("ZOHO_SMTP_PASSWORD")
 
     from_email = smtp_user
 
