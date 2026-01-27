@@ -4,6 +4,7 @@ from routers.classes.classes import CheckoutRequest
 from fastapi import APIRouter, HTTPException, Request, Depends
 from database.dbconfig.dbconfig import get_db_connection
 from database.orders import insert_order, update_order_status
+from services.mailing import send_order_confirmation
 
 ENV = os.environ.get("ENV", "dev")
 
@@ -29,6 +30,7 @@ async def create_checkout_session(data: CheckoutRequest, conn=Depends(get_db_con
 
         session = stripe.checkout.Session.create(
             mode="payment",
+            customer_email=data.orderData.customer['email'],
             line_items=[
                 {
                     "price_data": {
@@ -66,7 +68,9 @@ async def stripe_webhook(request: Request, conn=Depends(get_db_connection)):
     if event['type'] == 'checkout.session.completed':
         session = event['data']['object']
         order_id = session["success_url"].split("/")[-1]
+        customer_email = session.customer_details.email
         await update_order_status(conn, order_id, "paid")
+        await send_order_confirmation(customer_email, order_id)
         print("Payment completed!", session)
 
     return {"status": "ok"}
