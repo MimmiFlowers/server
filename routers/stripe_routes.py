@@ -70,7 +70,7 @@ async def stripe_webhook(request: Request, conn=Depends(get_db_connection)):
         order_id = session["success_url"].split("/")[-1]
         customer_email = session.customer_details.email
         await update_order_status(conn, order_id, "paid")
-        await send_order_confirmation(customer_email, order_id)
+        send_order_confirmation(customer_email, order_id)
         print("Payment completed!", session)
 
     return {"status": "ok"}
