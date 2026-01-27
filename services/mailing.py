@@ -14,7 +14,7 @@ else:
 
 def send_order_confirmation(to_email: str, order_id: str):
     smtp_server = os.getenv("ZOHO_SMPT_HOST")
-    smtp_port = os.getenv("ZOHO_SMPT_PORT")
+    smtp_port = int(os.getenv("ZOHO_SMPT_PORT"))
     smtp_user = os.getenv("ZOHO_SMPT_USER")
     smtp_password = os.getenv("ZOHO_SMPT_PASSWORD")
 
@@ -36,6 +36,8 @@ def send_order_confirmation(to_email: str, order_id: str):
     msg.attach(MIMEText(body, 'plain'))
 
     context = ssl.create_default_context()
+
+    print("Preparing to send email...", to_email, order_id, smtp_server, smtp_port, smtp_user)
 
     try:
         with smtplib.SMTP(smtp_server, smtp_port) as server:
