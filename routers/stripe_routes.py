@@ -2,6 +2,8 @@ import logging
 import stripe
 from routers.classes.classes import CheckoutRequest
 from fastapi import APIRouter, HTTPException, Request, Depends
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from database.dbconfig.dbconfig import get_db_connection
 from database.orders import insert_order, update_order_status, get_order_status
 from database.products import get_product_prices_by_names
@@ -9,6 +11,8 @@ from services.mailing import send_order_confirmation
 from config import settings
 
 logger = logging.getLogger(__name__)
+
+limiter = Limiter(key_func=get_remote_address)
 
 # Delivery fee in SEK (must match client-side constant)
 DELIVERY_FEE_SEK = 99
@@ -25,7 +29,8 @@ stripe.api_key = settings.STRIPE_SECRET_KEY
 
 
 @router.post("/create_checkout_session")
-async def create_checkout_session(data: CheckoutRequest, conn=Depends(get_db_connection)):
+@limiter.limit("10/minute")
+async def create_checkout_session(request: Request, data: CheckoutRequest, conn=Depends(get_db_connection)):
     # --- Server-side price validation ---
     # Look up real prices from DB instead of trusting client-supplied values
     product_names = [item.name for item in data.items]
@@ -97,6 +102,7 @@ async def create_checkout_session(data: CheckoutRequest, conn=Depends(get_db_con
 
 
 @router.post("/webhook/session_completed")
+@limiter.limit("60/minute")
 async def stripe_webhook(request: Request, conn=Depends(get_db_connection)):
     payload = await request.body()
     sig_header = request.headers.get('stripe-signature')
