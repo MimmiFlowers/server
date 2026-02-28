@@ -56,7 +56,7 @@ async def update_order_status(conn, order_id: str, status: OrderStatus):
     try:
         async with conn.cursor() as cur:
             await cur.execute(
-                'UPDATE orders SET status=%s WHERE "orderID"=%s',
+                'UPDATE orders SET status=%s, "updatedAt"=CURRENT_TIMESTAMP WHERE "orderID"=%s',
                 (status, order_id),
             )
             await conn.commit()
