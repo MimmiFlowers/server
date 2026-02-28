@@ -139,13 +139,23 @@ async def stripe_webhook(request: Request, conn=Depends(get_db_connection)):
             logger.error("Order %s not found in database", order_id)
             return {"status": "ok"}
 
-        await update_order_status(conn, order_id, "paid")
+        # --- DB update and email are in separate try/except blocks ---
+        # so email failure never prevents the order status from being updated.
+        try:
+            await update_order_status(conn, order_id, "paid")
+            logger.info("Order %s marked as paid", order_id)
+        except Exception as e:
+            logger.error("Failed to update order %s to paid: %s", order_id, e)
+            raise HTTPException(status_code=500, detail="Internal server error")
 
-        customer_email = session.get("customer_details", {}).get("email")
-        if customer_email:
-            await send_order_confirmation(customer_email, order_id)
-        else:
-            logger.warning("No customer email for order %s, skipping confirmation", order_id)
+        try:
+            customer_email = session.get("customer_details", {}).get("email")
+            if customer_email:
+                await send_order_confirmation(customer_email, order_id)
+            else:
+                logger.warning("No customer email for order %s, skipping confirmation", order_id)
+        except Exception as e:
+            logger.error("Failed to send confirmation email for order %s: %s", order_id, e)
 
         logger.info("Payment completed for order %s", order_id)
 

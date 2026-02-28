@@ -92,8 +92,7 @@ async def get_product_by_id(conn, product_id: int, preferred_langs: list[str]):
                     "picture": product[8],
                     "contents": product[9]
                 }
-            else:
-                return {"error": "Product not found"}
+            return None
     except Exception as e:
         await conn.rollback()
         raise e
