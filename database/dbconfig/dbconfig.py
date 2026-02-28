@@ -1,6 +1,11 @@
 import os
-import psycopg
+import logging
+from contextlib import asynccontextmanager
+from psycopg_pool import AsyncConnectionPool
 from dotenv import load_dotenv
+from fastapi import HTTPException
+
+logger = logging.getLogger(__name__)
 
 ENV = os.environ.get("ENV", "dev")
 
@@ -9,20 +14,48 @@ if ENV == "dev":
 else:
     load_dotenv(".env.prod")
 
-# load_dotenv()
+DB_URL = os.getenv("DB_URL")
 
-# connection_creds = "dbname=" + os.getenv("DB_NAME") + \
-#                    " user=" + os.getenv("DB_USER") + \
-#                    " password=" + os.getenv("DB_PASSWORD") + \
-#                    " host=" + os.getenv("DB_HOST") + \
-#                    " port=" + os.getenv("DB_PORT")
+pool: AsyncConnectionPool | None = None
 
-connection_creds = os.getenv("DB_URL")
+
+@asynccontextmanager
+async def lifespan(app):
+    """FastAPI lifespan: open the connection pool on startup, close on shutdown."""
+    global pool
+
+    if not DB_URL:
+        raise RuntimeError(
+            "DB_URL environment variable is not set. "
+            "Cannot start without a database connection string."
+        )
+
+    pool = AsyncConnectionPool(
+        conninfo=DB_URL,
+        min_size=2,
+        max_size=10,
+        open=False,
+    )
+    await pool.open()
+    logger.info("Database connection pool opened (min=2, max=10)")
+
+    yield
+
+    await pool.close()
+    logger.info("Database connection pool closed")
+
 
 async def get_db_connection():
-    try:
-        conn = await psycopg.AsyncConnection.connect(connection_creds)
-        return conn
-    except Exception as e:
-        print("Error connecting to the database:", e)
-        return None
+    """FastAPI dependency that provides a pooled database connection.
+
+    The connection is automatically returned to the pool after the
+    request completes, even if an exception is raised.
+    """
+    if pool is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Database connection pool is not available",
+        )
+
+    async with pool.connection() as conn:
+        yield conn

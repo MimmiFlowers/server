@@ -2,8 +2,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from routers import data_routes, stripe_routes
+from database.dbconfig.dbconfig import lifespan
 
-app = FastAPI()
+app = FastAPI(lifespan=lifespan)
 
 origins = [
     "http://localhost",
