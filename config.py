@@ -94,3 +94,23 @@ def _load_settings() -> Settings:
 
 
 settings: Settings = _load_settings()
+
+# ---------------------------------------------------------------------------
+# 4. Optional settings with defaults
+# ---------------------------------------------------------------------------
+# CORS_ORIGINS: comma-separated list of allowed origins.
+# Falls back to sensible defaults per environment.
+_DEFAULT_CORS_ORIGINS = {
+    "dev": "http://localhost,http://localhost:3000,http://localhost:5173",
+    "stg": "http://localhost,http://localhost:5173,https://stg.mimmiflowers.se",
+    "prod": "https://mimmiflowers.se,https://www.mimmiflowers.se",
+}
+
+CORS_ORIGINS: list[str] = [
+    origin.strip()
+    for origin in os.environ.get(
+        "CORS_ORIGINS",
+        _DEFAULT_CORS_ORIGINS.get(ENV, ""),
+    ).split(",")
+    if origin.strip()
+]
