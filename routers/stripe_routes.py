@@ -1,4 +1,5 @@
 import logging
+import re
 import stripe
 from routers.classes.classes import CheckoutRequest
 from fastapi import APIRouter, HTTPException, Request, Depends
@@ -133,14 +134,29 @@ async def stripe_webhook(request: Request, conn=Depends(get_db_connection)):
 
         if not order_id:
             logger.error("No orderID found in webhook session: %s", session.get("id"))
-            return {"status": "ok"}
+    return {"status": "ok"}
 
-        # --- 3. Idempotency check — skip if already paid ---
-        current_status = await get_order_status(conn, order_id)
-        if current_status == "paid":
-            logger.info("Order %s already paid, skipping duplicate webhook", order_id)
-            return {"status": "ok"}
 
+@router.get("/order/{order_id}/status")
+@limiter.limit("30/minute")
+async def get_order_status_endpoint(
+    request: Request,
+    order_id: str,
+    conn=Depends(get_db_connection),
+):
+    """Return the payment status of an order.
+
+    Used by the SuccessPage to verify the order was actually paid
+    before showing a success message and clearing the cart.
+    """
+    if not re.match(r"^[\w\-]+$", order_id) or len(order_id) > 64:
+        raise HTTPException(status_code=400, detail="Invalid order ID format")
+
+    status = await get_order_status(conn, order_id)
+    if status is None:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    return {"orderID": order_id, "status": status}
         if current_status is None:
             logger.error("Order %s not found in database", order_id)
             return {"status": "ok"}
