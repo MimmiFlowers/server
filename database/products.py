@@ -101,6 +101,8 @@ async def get_product_by_id(conn, product_id: int, preferred_langs: list[str]):
 async def get_products_by_category(conn, category: str):
     try:
         async with conn.cursor() as cur:
+            # Escape LIKE metacharacters to prevent injection via search term
+            escaped = category.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
             await cur.execute("SELECT \
                             productID, \
                             name, \
@@ -108,7 +110,7 @@ async def get_products_by_category(conn, category: str):
                             price  \
                         FROM products  \
                         WHERE category ilike %s", 
-                ('%' + category + '%',)
+                ('%' + escaped + '%',)
             )
             products = await cur.fetchall()
             response = [

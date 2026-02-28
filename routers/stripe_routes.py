@@ -84,7 +84,7 @@ async def create_checkout_session(data: CheckoutRequest, conn=Depends(get_db_con
 
         session = stripe.checkout.Session.create(
             mode="payment",
-            customer_email=data.orderData.customer['email'],
+            customer_email=data.orderData.customer.email,
             line_items=line_items,
             metadata={"orderID": data.orderData.orderID},
             success_url=settings.SUCCESS_URL + data.orderData.orderID,

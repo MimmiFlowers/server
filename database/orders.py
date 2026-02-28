@@ -1,20 +1,21 @@
 import json
-from routers.classes.classes import OrderData
+from routers.classes.classes import OrderData, OrderStatus
+
 
 async def insert_order(conn, order_data: OrderData, status: str = "pending"):
     try:
         async with conn.cursor() as cur:
             await cur.execute(" \
                     INSERT INTO orders ( \
-                        orderID, \
+                        \"orderID\", \
                         status, \
                         customer, \
                         recipient, \
                         pickup, \
-                        orderForMyself, \
+                        \"orderForMyself\", \
                         items, \
                         subtotal, \
-                        deliveryFee, \
+                        \"deliveryFee\", \
                         total, \
                         moms \
                     ) \
@@ -22,8 +23,8 @@ async def insert_order(conn, order_data: OrderData, status: str = "pending"):
                 ", (
                     order_data.orderID,
                     status,
-                    json.dumps(order_data.customer),
-                    json.dumps(order_data.recipient) if order_data.recipient else None,
+                    order_data.customer.model_dump_json(),
+                    order_data.recipient.model_dump_json() if order_data.recipient else None,
                     order_data.pickup,
                     order_data.orderForMyself,
                     json.dumps(order_data.items),
@@ -50,7 +51,8 @@ async def get_order_status(conn, order_id: str) -> str | None:
         return row[0] if row else None
 
 
-async def update_order_status(conn, order_id: str, status: str):
+async def update_order_status(conn, order_id: str, status: OrderStatus):
+    """Update order status. Only accepts valid OrderStatus values."""
     try:
         async with conn.cursor() as cur:
             await cur.execute(
