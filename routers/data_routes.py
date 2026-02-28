@@ -2,7 +2,8 @@ from fastapi import APIRouter, Request, Depends
 from database.dbconfig.dbconfig import get_db_connection
 from database.products import get_all_products, \
                             get_product_by_id, \
-                            get_products_by_category
+                            get_products_by_category, \
+                            get_collections as db_get_collections
 
 router = APIRouter(
     prefix="/data",
@@ -44,7 +45,7 @@ async def get_favorites(category: str, conn=Depends(get_db_connection)):
 @router.get("/collections")
 async def get_collections(conn=Depends(get_db_connection)):
     try:
-        collections = await get_collections(conn)
+        collections = await db_get_collections(conn)
         return {"data": collections}
     except Exception as e:
         return {"error": str(e)}

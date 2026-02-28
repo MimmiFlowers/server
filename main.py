@@ -25,34 +25,5 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# app.mount("/assets", StaticFiles(directory="assets"), name="assets")
-
-@app.get('/collections')
-async def get_collections():
-    return {
-        "data": [
-            {
-                "id": "1",
-                "name": "Season",
-                "picture": "https://i.imgur.com/TAPsYEH.jpg"
-            },
-            {
-                "id": "2",
-                "name": "Mono bouquets",
-                "picture": "https://i.imgur.com/TAPsYEH.jpg"
-            },
-            {
-                "id": "3",
-                "name": "Boxes and Baskets",
-                "picture": "https://i.imgur.com/TAPsYEH.jpg"
-            },
-            {
-                "id": "4",
-                "name": "Gifts",
-                "picture": "https://i.imgur.com/TAPsYEH.jpg"
-            }
-        ]
-    }
-
 app.include_router(stripe_routes.router)
 app.include_router(data_routes.router)
