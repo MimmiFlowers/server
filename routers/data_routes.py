@@ -1,5 +1,5 @@
 import logging
-from fastapi import APIRouter, HTTPException, Request, Depends
+from fastapi import APIRouter, HTTPException, Query, Request, Depends
 from database.dbconfig.dbconfig import get_db_connection
 from database.products import get_all_products, \
                             get_product_by_id, \
@@ -16,9 +16,13 @@ router = APIRouter(
 
 
 @router.get("/products")
-async def get_products(conn=Depends(get_db_connection)):
+async def get_products(
+    limit: int = Query(default=50, ge=1, le=200, description="Max products to return"),
+    offset: int = Query(default=0, ge=0, description="Number of products to skip"),
+    conn=Depends(get_db_connection),
+):
     try:
-        products = await get_all_products(conn)
+        products = await get_all_products(conn, limit=limit, offset=offset)
         return {"products": products}
     except Exception as e:
         logger.error("Failed to fetch products: %s", e)
@@ -43,7 +47,7 @@ async def get_product(product_id: int, request: Request, conn=Depends(get_db_con
 
     
 @router.get("/category/{category}")
-async def get_favorites(category: str, conn=Depends(get_db_connection)):
+async def get_products_by_category_route(category: str, conn=Depends(get_db_connection)):
     try:
         products = await get_products_by_category(conn, category)
         return {"data": products}

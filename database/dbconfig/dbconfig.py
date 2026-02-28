@@ -1,6 +1,7 @@
 import logging
 from contextlib import asynccontextmanager
 from psycopg_pool import AsyncConnectionPool
+from psycopg.rows import dict_row
 from fastapi import HTTPException
 from config import settings
 
@@ -19,6 +20,7 @@ async def lifespan(app):
         min_size=2,
         max_size=10,
         open=False,
+        kwargs={"row_factory": dict_row},
     )
     await pool.open()
     logger.info("Database connection pool opened (min=2, max=10)")

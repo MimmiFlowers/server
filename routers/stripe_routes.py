@@ -1,5 +1,6 @@
 import logging
 import re
+import uuid
 import stripe
 from routers.classes.classes import CheckoutRequest
 from fastapi import APIRouter, HTTPException, Request, Depends
@@ -84,6 +85,10 @@ async def create_checkout_session(request: Request, data: CheckoutRequest, conn=
     data.orderData.deliveryFee = delivery_fee_ore
     data.orderData.total = total_ore
     data.orderData.moms = moms_ore / 100  # store as SEK float for DB
+
+    # Generate orderID server-side — never trust client-supplied IDs
+    order_id = f"ORD-{uuid.uuid4().hex[:12].upper()}"
+    data.orderData.orderID = order_id
 
     try:
         await insert_order(conn, data.orderData, status="pending")

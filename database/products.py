@@ -13,116 +13,60 @@ async def get_product_prices_by_names(conn, names: list[str]) -> dict[str, Decim
             (names,),
         )
         rows = await cur.fetchall()
-        return {row[0]: row[1] for row in rows}
+        return {row["name"]: row["price"] for row in rows}
 
 
-async def get_all_products(conn):
+async def get_all_products(conn, limit: int = 50, offset: int = 0):
     try:
         async with conn.cursor() as cur:
-            await cur.execute("SELECT \
-                            productID, \
-                            sku, \
-                            name, \
-                            description, \
-                            price, \
-                            stock, \
-                            category, \
-                            collection, \
-                            image, \
-                            contents \
-                        FROM products"
-                    )
-            products = await cur.fetchall()
-            response = [
-                {
-                    "productID": product[0],
-                    "sku": product[1],
-                    "name": product[2],
-                    "description": product[3],
-                    "price": product[4],
-                    "stock": product[5],
-                    "category": product[6],
-                    "collection": product[7],
-                    "picture": product[8],
-                    "contents": product[9]
-                }
-                for product in products
-            ]
-            return response
+            await cur.execute(
+                """SELECT "productID", sku, name, description,
+                          price, stock, category, collection,
+                          image AS picture, contents
+                   FROM products
+                   ORDER BY "productID"
+                   LIMIT %s OFFSET %s""",
+                (limit, offset),
+            )
+            return await cur.fetchall()
     except Exception as e:
         await conn.rollback()
         raise e
-    
+
 
 async def get_product_by_id(conn, product_id: int, preferred_langs: list[str]):
     try:
         async with conn.cursor() as cur:
-            await cur.execute("SELECT \
-                            productID, \
-                            sku, \
-                            name, \
-                            COALESCE( \
-                                description -> %s ->> 'description', \
-                                description -> %s ->> 'description' \
-                            ) AS description, \
-                            price, \
-                            stock, \
-                            category, \
-                            collection, \
-                            image, \
-                            contents \
-                        FROM products \
-                        WHERE productID = %s", (
-                                                preferred_langs[0],
-                                                preferred_langs[1],
-                                                product_id,
-                                            )
-                    )
-            product = await cur.fetchone()
-            if product:
-                return {
-                    "productID": product[0],
-                    "sku": product[1],
-                    "name": product[2],
-                    "description": product[3],
-                    "price": product[4],
-                    "stock": product[5],
-                    "category": product[6],
-                    "collection": product[7],
-                    "picture": product[8],
-                    "contents": product[9]
-                }
-            return None
+            await cur.execute(
+                """SELECT "productID", sku, name,
+                          COALESCE(
+                              description -> %s ->> 'description',
+                              description -> %s ->> 'description'
+                          ) AS description,
+                          price, stock, category, collection,
+                          image AS picture, contents
+                   FROM products
+                   WHERE "productID" = %s""",
+                (preferred_langs[0], preferred_langs[1], product_id),
+            )
+            return await cur.fetchone()
     except Exception as e:
         await conn.rollback()
         raise e
-        
+
 
 async def get_products_by_category(conn, category: str):
     try:
         async with conn.cursor() as cur:
             # Escape LIKE metacharacters to prevent injection via search term
             escaped = category.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-            await cur.execute("SELECT \
-                            productID, \
-                            name, \
-                            image, \
-                            price  \
-                        FROM products  \
-                        WHERE category ilike %s", 
-                ('%' + escaped + '%',)
+            await cur.execute(
+                """SELECT "productID", name, image AS picture, price
+                   FROM products
+                   WHERE category ILIKE %s""",
+                ("%" + escaped + "%",),
             )
-            products = await cur.fetchall()
-            response = [
-                {
-                    "productID": product[0],
-                    "name": product[1],
-                    "picture": product[2],
-                    "price": product[3]
-                }
-                for product in products
-            ]
-            return response
+            return await cur.fetchall()
     except Exception as e:
         await conn.rollback()
         raise e
@@ -131,22 +75,11 @@ async def get_products_by_category(conn, category: str):
 async def get_collections(conn):
     try:
         async with conn.cursor() as cur:
-            await cur.execute("SELECT \
-                            collectionID, \
-                            name, \
-                            image  \
-                        FROM collections"
-                    )
-            collections = await cur.fetchall()
-            response = [
-                {
-                    "id": collection[0],
-                    "name": collection[1],
-                    "picture": collection[2]
-                }
-                for collection in collections
-            ]
-            return response
+            await cur.execute(
+                """SELECT "collectionID" AS id, name, image AS picture
+                   FROM collections"""
+            )
+            return await cur.fetchall()
     except Exception as e:
         await conn.rollback()
-        raise e 
+        raise e

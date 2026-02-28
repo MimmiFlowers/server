@@ -48,7 +48,7 @@ async def get_order_status(conn, order_id: str) -> str | None:
             (order_id,),
         )
         row = await cur.fetchone()
-        return row[0] if row else None
+        return row["status"] if row else None
 
 
 async def update_order_status(conn, order_id: str, status: OrderStatus):
