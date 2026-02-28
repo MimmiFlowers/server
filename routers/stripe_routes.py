@@ -81,10 +81,11 @@ async def create_checkout_session(request: Request, data: CheckoutRequest, conn=
     moms_ore = int(total_ore * VAT_RATE)
 
     # Override client-supplied monetary values with server-calculated ones
+    # All monetary values stored in öre (SEK × 100) for consistency
     data.orderData.subtotal = subtotal_ore
     data.orderData.deliveryFee = delivery_fee_ore
     data.orderData.total = total_ore
-    data.orderData.moms = moms_ore / 100  # store as SEK float for DB
+    data.orderData.moms = moms_ore
 
     # Generate orderID server-side — never trust client-supplied IDs
     order_id = f"ORD-{uuid.uuid4().hex[:12].upper()}"

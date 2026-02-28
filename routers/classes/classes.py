@@ -40,7 +40,7 @@ class OrderData(BaseModel):
     subtotal: int
     deliveryFee: int = Field(ge=0)
     total: int = Field(ge=1)
-    moms: float = Field(ge=0)
+    moms: int = Field(ge=0)
 
 
 class CheckoutRequest(BaseModel):
