@@ -1,17 +1,10 @@
-import os, stripe
-from dotenv import load_dotenv
+import stripe
 from routers.classes.classes import CheckoutRequest
 from fastapi import APIRouter, HTTPException, Request, Depends
 from database.dbconfig.dbconfig import get_db_connection
 from database.orders import insert_order, update_order_status
 from services.mailing import send_order_confirmation
-
-ENV = os.environ.get("ENV", "dev")
-
-if ENV == "dev":
-    load_dotenv(".env.dev")
-else:
-    load_dotenv(".env.stg")
+from config import settings
 
 router = APIRouter(
     prefix="/stripe",
@@ -19,9 +12,7 @@ router = APIRouter(
     responses={404: {"description": "Not found"}}
 )
 
-# conn = get_db_connection()
-
-stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
+stripe.api_key = settings.STRIPE_SECRET_KEY
 
 @router.post("/create_checkout_session")
 async def create_checkout_session(data: CheckoutRequest, conn=Depends(get_db_connection)):
@@ -44,8 +35,8 @@ async def create_checkout_session(data: CheckoutRequest, conn=Depends(get_db_con
                 }
                 for item in data.items
             ],
-            success_url=os.getenv("SUCCESS_URL") + data.orderData.orderID,
-            cancel_url=os.getenv("CANCEL_URL") + data.orderData.orderID,
+            success_url=settings.SUCCESS_URL + data.orderData.orderID,
+            cancel_url=settings.CANCEL_URL + data.orderData.orderID,
         )
         return {"session": session}
     except Exception as e:
@@ -56,7 +47,7 @@ async def create_checkout_session(data: CheckoutRequest, conn=Depends(get_db_con
 async def stripe_webhook(request: Request, conn=Depends(get_db_connection)):
     payload = await request.body()
     sig_header = request.headers.get('stripe-signature')
-    webhook_secret = os.getenv("STRIPE_WEBHOOK_SECRET")
+    webhook_secret = settings.STRIPE_WEBHOOK_SECRET
 
     try:
         event = stripe.Webhook.construct_event(

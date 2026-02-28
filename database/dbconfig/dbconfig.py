@@ -1,20 +1,10 @@
-import os
 import logging
 from contextlib import asynccontextmanager
 from psycopg_pool import AsyncConnectionPool
-from dotenv import load_dotenv
 from fastapi import HTTPException
+from config import settings
 
 logger = logging.getLogger(__name__)
-
-ENV = os.environ.get("ENV", "dev")
-
-if ENV == "dev":
-    load_dotenv(".env.dev")
-else:
-    load_dotenv(".env.prod")
-
-DB_URL = os.getenv("DB_URL")
 
 pool: AsyncConnectionPool | None = None
 
@@ -24,14 +14,8 @@ async def lifespan(app):
     """FastAPI lifespan: open the connection pool on startup, close on shutdown."""
     global pool
 
-    if not DB_URL:
-        raise RuntimeError(
-            "DB_URL environment variable is not set. "
-            "Cannot start without a database connection string."
-        )
-
     pool = AsyncConnectionPool(
-        conninfo=DB_URL,
+        conninfo=settings.DB_URL,
         min_size=2,
         max_size=10,
         open=False,

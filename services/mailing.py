@@ -1,24 +1,19 @@
-import smtplib, ssl, os
-from dotenv import load_dotenv
+import smtplib, ssl
+import logging
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from email.mime.base import MIMEBase
 from email.utils import formataddr
-# from email import encoders
+from config import settings
 
-ENV = os.environ.get("ENV", "dev")
+logger = logging.getLogger(__name__)
 
-if ENV == "dev":
-    load_dotenv(".env.dev")
-else:
-    load_dotenv(".env.stg")
 
 def send_order_confirmation(to_email: str, order_id: str):
-    smtp_server = os.getenv("ZOHO_SMTP_HOST")
-    smtp_port = int(os.getenv("ZOHO_SMTP_PORT"))
-    smtp_user = os.getenv("ZOHO_SMTP_USER")
-    smtp_password = os.getenv("ZOHO_SMTP_PASSWORD")
-    smtp_sender_name = os.getenv("ZOHO_SMTP_SENDER_NAME")
+    smtp_server = settings.ZOHO_SMTP_HOST
+    smtp_port = int(settings.ZOHO_SMTP_PORT)
+    smtp_user = settings.ZOHO_SMTP_USER
+    smtp_password = settings.ZOHO_SMTP_PASSWORD
+    smtp_sender_name = settings.ZOHO_SMTP_SENDER_NAME
 
     from_email = smtp_user
 
@@ -39,14 +34,13 @@ def send_order_confirmation(to_email: str, order_id: str):
 
     context = ssl.create_default_context()
 
-    print("Preparing to send email...", to_email, order_id, smtp_server, smtp_port, smtp_user)
+    logger.info("Preparing to send email to %s for order %s", to_email, order_id)
 
     try:
         with smtplib.SMTP(smtp_server, smtp_port) as server:
             server.starttls(context=context)
             server.login(smtp_user, smtp_password)
             server.sendmail(from_email, to_email, msg.as_string())
-        print(f"Order confirmation email sent to {to_email} for order {order_id}.")
+        logger.info("Order confirmation email sent to %s for order %s", to_email, order_id)
     except Exception as e:
-        print(f"Failed to send email to {to_email}: {e}")
-
+        logger.error("Failed to send email to %s: %s", to_email, e)
