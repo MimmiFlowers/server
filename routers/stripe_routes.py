@@ -143,7 +143,7 @@ async def stripe_webhook(request: Request, conn=Depends(get_db_connection)):
 
         customer_email = session.get("customer_details", {}).get("email")
         if customer_email:
-            send_order_confirmation(customer_email, order_id)
+            await send_order_confirmation(customer_email, order_id)
         else:
             logger.warning("No customer email for order %s, skipping confirmation", order_id)
 

@@ -1,4 +1,6 @@
-import smtplib, ssl
+import asyncio
+import smtplib
+import ssl
 import logging
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -7,8 +9,12 @@ from config import settings
 
 logger = logging.getLogger(__name__)
 
+# Connection timeout in seconds
+SMTP_TIMEOUT = 10
 
-def send_order_confirmation(to_email: str, order_id: str):
+
+def _send_email_sync(to_email: str, order_id: str) -> None:
+    """Blocking SMTP send — meant to be called via asyncio.to_thread()."""
     smtp_server = settings.ZOHO_SMTP_HOST
     smtp_port = int(settings.ZOHO_SMTP_PORT)
     smtp_user = settings.ZOHO_SMTP_USER
@@ -34,13 +40,22 @@ def send_order_confirmation(to_email: str, order_id: str):
 
     context = ssl.create_default_context()
 
-    logger.info("Preparing to send email to %s for order %s", to_email, order_id)
+    with smtplib.SMTP(smtp_server, smtp_port, timeout=SMTP_TIMEOUT) as server:
+        server.starttls(context=context)
+        server.login(smtp_user, smtp_password)
+        server.sendmail(from_email, to_email, msg.as_string())
 
+    logger.info("Order confirmation email sent to %s for order %s", to_email, order_id)
+
+
+async def send_order_confirmation(to_email: str, order_id: str) -> None:
+    """Send order confirmation email without blocking the event loop.
+
+    Runs the blocking SMTP call in a thread pool. Failures are logged
+    but never propagated — email delivery must not crash the webhook.
+    """
+    logger.info("Preparing to send email to %s for order %s", to_email, order_id)
     try:
-        with smtplib.SMTP(smtp_server, smtp_port) as server:
-            server.starttls(context=context)
-            server.login(smtp_user, smtp_password)
-            server.sendmail(from_email, to_email, msg.as_string())
-        logger.info("Order confirmation email sent to %s for order %s", to_email, order_id)
+        await asyncio.to_thread(_send_email_sync, to_email, order_id)
     except Exception as e:
         logger.error("Failed to send email to %s: %s", to_email, e)
