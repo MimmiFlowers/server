@@ -1,0 +1,38 @@
+name: Server CI
+
+on:
+  push:
+    branches: [main, AgentProdFixedVersion]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run tests
+        env:
+          ENV: dev
+          DB_URL: postgresql://test:test@localhost:5432/testdb
+          STRIPE_SECRET_KEY: sk_test_fake
+          STRIPE_WEBHOOK_SECRET: whsec_fake
+          SUCCESS_URL: http://localhost:3000/Success/
+          CANCEL_URL: http://localhost:3000/Cancel/
+          ZOHO_SMTP_HOST: smtp.example.com
+          ZOHO_SMTP_PORT: "587"
+          ZOHO_SMTP_USER: test@example.com
+          ZOHO_SMTP_PASSWORD: testpass
+          ZOHO_SMTP_SENDER_NAME: Test
+        run: python -m pytest tests/ -v

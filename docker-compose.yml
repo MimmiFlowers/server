@@ -1,0 +1,51 @@
+version: "3.9"
+
+# Local development stack: Postgres + FastAPI server + Vite dev server
+# Usage: docker compose up --build
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: mimmi
+      POSTGRES_PASSWORD: mimmi_dev
+      POSTGRES_DB: mimmiflowers
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ../db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mimmi -d mimmiflowers"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file: .env.dev
+    environment:
+      ENV: dev
+      DB_URL: postgresql://mimmi:mimmi_dev@db:5432/mimmiflowers
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  client:
+    build:
+      context: ../client
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - server
+
+volumes:
+  pgdata:
