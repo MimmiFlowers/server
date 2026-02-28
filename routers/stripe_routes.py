@@ -4,10 +4,16 @@ from routers.classes.classes import CheckoutRequest
 from fastapi import APIRouter, HTTPException, Request, Depends
 from database.dbconfig.dbconfig import get_db_connection
 from database.orders import insert_order, update_order_status, get_order_status
+from database.products import get_product_prices_by_names
 from services.mailing import send_order_confirmation
 from config import settings
 
 logger = logging.getLogger(__name__)
+
+# Delivery fee in SEK (must match client-side constant)
+DELIVERY_FEE_SEK = 99
+# Swedish VAT rate
+VAT_RATE = 0.25
 
 router = APIRouter(
     prefix="/stripe",
@@ -20,31 +26,73 @@ stripe.api_key = settings.STRIPE_SECRET_KEY
 
 @router.post("/create_checkout_session")
 async def create_checkout_session(data: CheckoutRequest, conn=Depends(get_db_connection)):
+    # --- Server-side price validation ---
+    # Look up real prices from DB instead of trusting client-supplied values
+    product_names = [item.name for item in data.items]
+    db_prices = await get_product_prices_by_names(conn, product_names)
+
+    # Verify all products exist
+    missing = [name for name in product_names if name not in db_prices]
+    if missing:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown products: {', '.join(missing)}",
+        )
+
+    # Build Stripe line items with DB-verified prices
+    line_items = []
+    subtotal_ore = 0  # in öre (SEK * 100)
+
+    for item in data.items:
+        # DB price is NUMERIC(10,2) in SEK → convert to öre (int)
+        price_ore = int(db_prices[item.name] * 100)
+        subtotal_ore += price_ore * item.quantity
+        line_items.append({
+            "price_data": {
+                "currency": "sek",
+                "product_data": {"name": item.name},
+                "unit_amount": price_ore,
+            },
+            "quantity": item.quantity,
+        })
+
+    # Add delivery fee if not pickup
+    delivery_fee_ore = 0
+    if not data.orderData.pickup:
+        delivery_fee_ore = DELIVERY_FEE_SEK * 100
+        line_items.append({
+            "price_data": {
+                "currency": "sek",
+                "product_data": {"name": "Delivery Fee"},
+                "unit_amount": delivery_fee_ore,
+            },
+            "quantity": 1,
+        })
+
+    # Calculate totals server-side
+    total_ore = subtotal_ore + delivery_fee_ore
+    moms_ore = int(total_ore * VAT_RATE)
+
+    # Override client-supplied monetary values with server-calculated ones
+    data.orderData.subtotal = subtotal_ore
+    data.orderData.deliveryFee = delivery_fee_ore
+    data.orderData.total = total_ore
+    data.orderData.moms = moms_ore / 100  # store as SEK float for DB
+
     try:
         await insert_order(conn, data.orderData, status="pending")
 
         session = stripe.checkout.Session.create(
             mode="payment",
             customer_email=data.orderData.customer['email'],
-            line_items=[
-                {
-                    "price_data": {
-                        "currency": "sek",
-                        "product_data": {
-                            "name": item.name,
-                        },
-                        "unit_amount": item.price,
-                    },
-                    "quantity": item.quantity,
-                }
-                for item in data.items
-            ],
+            line_items=line_items,
             metadata={"orderID": data.orderData.orderID},
             success_url=settings.SUCCESS_URL + data.orderData.orderID,
             cancel_url=settings.CANCEL_URL + data.orderData.orderID,
         )
         return {"session": session}
     except Exception as e:
+        logger.error("Checkout session creation failed: %s", e)
         raise HTTPException(status_code=400, detail=str(e))
 
 

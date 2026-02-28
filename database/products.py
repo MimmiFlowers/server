@@ -1,3 +1,21 @@
+from decimal import Decimal
+
+
+async def get_product_prices_by_names(conn, names: list[str]) -> dict[str, Decimal]:
+    """Look up product prices by name. Returns {name: price_in_sek}."""
+    if not names:
+        return {}
+
+    async with conn.cursor() as cur:
+        # Use ANY(%s) with a list parameter for safe IN-clause
+        await cur.execute(
+            "SELECT name, price FROM products WHERE name = ANY(%s)",
+            (names,),
+        )
+        rows = await cur.fetchall()
+        return {row[0]: row[1] for row in rows}
+
+
 async def get_all_products(conn):
     try:
         async with conn.cursor() as cur:
