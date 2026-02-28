@@ -5,6 +5,7 @@ charset-normalizer==3.4.3
 click==8.2.1
 email-validator==2.3.0
 fastapi==0.116.1
+gunicorn==25.1.0
 h11==0.16.0
 idna==3.10
 psycopg==3.2.9
