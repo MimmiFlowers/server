@@ -20,6 +20,15 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """Create initial tables, indexes, triggers."""
+    # --- collections (before products, referenced by FK) ---
+    op.execute("""
+        CREATE TABLE IF NOT EXISTS collections (
+            "collectionID" SERIAL PRIMARY KEY,
+            name TEXT NOT NULL UNIQUE,
+            image TEXT
+        )
+    """)
+
     # --- products ---
     op.execute("""
         CREATE TABLE IF NOT EXISTS products (
@@ -31,7 +40,7 @@ def upgrade() -> None:
             price NUMERIC(10, 2) NOT NULL,
             stock INT NOT NULL DEFAULT 0,
             category TEXT,
-            collection TEXT,
+            "collectionID" INT REFERENCES collections("collectionID") ON DELETE SET NULL,
             image TEXT,
             contents TEXT[],
             "createdAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -39,16 +48,8 @@ def upgrade() -> None:
         )
     """)
     op.execute('CREATE INDEX IF NOT EXISTS idx_products_category ON products(category)')
+    op.execute('CREATE INDEX IF NOT EXISTS idx_products_collection ON products("collectionID")')
     op.execute('CREATE INDEX IF NOT EXISTS idx_products_name ON products(name)')
-
-    # --- collections ---
-    op.execute("""
-        CREATE TABLE IF NOT EXISTS collections (
-            "collectionID" SERIAL PRIMARY KEY,
-            name TEXT NOT NULL,
-            image TEXT
-        )
-    """)
 
     # --- orders ---
     op.execute("""

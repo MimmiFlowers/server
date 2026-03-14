@@ -20,11 +20,14 @@ async def get_all_products(conn, limit: int = 50, offset: int = 0):
     try:
         async with conn.cursor() as cur:
             await cur.execute(
-                """SELECT "productID", sku, name, description,
-                          price, stock, category, collection,
-                          image AS picture, contents
-                   FROM products
-                   ORDER BY "productID"
+                """SELECT p."productID", p.sku, p.name, p.description,
+                          p.price, p.stock, p.category,
+                          c.name AS collection,
+                          p.image AS picture, p.contents
+                   FROM products p
+                   LEFT JOIN collections c
+                          ON p."collectionID" = c."collectionID"
+                   ORDER BY p."productID"
                    LIMIT %s OFFSET %s""",
                 (limit, offset),
             )
@@ -38,15 +41,18 @@ async def get_product_by_id(conn, product_id: int, preferred_langs: list[str]):
     try:
         async with conn.cursor() as cur:
             await cur.execute(
-                """SELECT "productID", sku, name,
+                """SELECT p."productID", p.sku, p.name,
                           COALESCE(
-                              description -> %s ->> 'description',
-                              description -> %s ->> 'description'
+                              p.description -> %s ->> 'description',
+                              p.description -> %s ->> 'description'
                           ) AS description,
-                          price, stock, category, collection,
-                          image AS picture, contents
-                   FROM products
-                   WHERE "productID" = %s""",
+                          p.price, p.stock, p.category,
+                          c.name AS collection,
+                          p.image AS picture, p.contents
+                   FROM products p
+                   LEFT JOIN collections c
+                          ON p."collectionID" = c."collectionID"
+                   WHERE p."productID" = %s""",
                 (preferred_langs[0], preferred_langs[1], product_id),
             )
             return await cur.fetchone()
