@@ -1,7 +1,11 @@
+import json
 import logging
+import os
 import re
 import uuid
 import stripe
+import httpx
+from datetime import datetime
 from routers.classes.classes import CheckoutRequest
 from fastapi import APIRouter, HTTPException, Request, Depends
 from slowapi import Limiter
@@ -20,6 +24,9 @@ limiter = Limiter(key_func=get_remote_address)
 DELIVERY_FEE_SEK = 99
 # Swedish VAT rate
 VAT_RATE = 0.25
+
+# Bot notification URL — optional; if not set, notifications are silently skipped
+BOT_NOTIFICATION_URL = os.environ.get("BOT_NOTIFICATION_URL", "")
 
 router = APIRouter(
     prefix="/stripe",
@@ -161,6 +168,7 @@ async def stripe_webhook(request: Request, conn=Depends(get_db_connection)):
             logger.error("Failed to update order %s to paid: %s", order_id, e)
             raise HTTPException(status_code=500, detail="Internal server error")
 
+        order_data = None
         try:
             customer_email = session.get("customer_details", {}).get("email")
             if customer_email:
@@ -173,6 +181,29 @@ async def stripe_webhook(request: Request, conn=Depends(get_db_connection)):
                 logger.warning("No customer email for order %s, skipping confirmation", order_id)
         except Exception as e:
             logger.error("Failed to send confirmation email for order %s: %s", order_id, e)
+
+        # --- Notify Telegram bot (fire-and-forget) ---
+        if BOT_NOTIFICATION_URL:
+            try:
+                if not order_data:
+                    order_data = await get_order_by_id(conn, order_id)
+                if order_data:
+                    # Serialize datetime fields for JSON transport
+                    serializable = {
+                        k: (v.isoformat() if isinstance(v, datetime) else v)
+                        for k, v in order_data.items()
+                    }
+                    async with httpx.AsyncClient(timeout=5.0) as client:
+                        resp = await client.post(
+                            BOT_NOTIFICATION_URL,
+                            content=json.dumps(serializable),
+                            headers={"Content-Type": "application/json"},
+                        )
+                        logger.info(
+                            "Bot notified for order %s (status=%d)", order_id, resp.status_code
+                        )
+            except Exception as e:
+                logger.error("Failed to notify bot for order %s: %s", order_id, e)
 
         logger.info("Payment completed for order %s", order_id)
 
