@@ -193,6 +193,8 @@ async def stripe_webhook(request: Request, conn=Depends(get_db_connection)):
                         k: (v.isoformat() if isinstance(v, datetime) else v)
                         for k, v in order_data.items()
                     }
+                    # Include environment so the bot can label non-production orders
+                    serializable["env"] = os.environ.get("ENV", "dev")
                     async with httpx.AsyncClient(timeout=5.0) as client:
                         resp = await client.post(
                             BOT_NOTIFICATION_URL,
