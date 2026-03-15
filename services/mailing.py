@@ -22,7 +22,7 @@ _EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
 _SITE_URL = settings.SUCCESS_URL.rsplit("/Success/", 1)[0] or "https://mimmiflowers.se"
 
 # Store pickup address
-_PICKUP_ADDRESS = "Kungsholmsgatan 10, Stockholm"
+_PICKUP_ADDRESS = "Rågsved torg, Bandhagen"
 
 # ── Design tokens (matching website) ──────────────────────────────
 _BG = "#FFF0F5"           # lavender blush — page background
