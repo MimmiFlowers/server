@@ -9,6 +9,7 @@ async def insert_order(conn, order_data: OrderData, status: str = "pending"):
                     INSERT INTO orders ( \
                         \"orderID\", \
                         status, \
+                        locale, \
                         customer, \
                         recipient, \
                         pickup, \
@@ -19,10 +20,11 @@ async def insert_order(conn, order_data: OrderData, status: str = "pending"):
                         total, \
                         moms \
                     ) \
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) \
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) \
                 ", (
                     order_data.orderID,
                     status,
+                    order_data.locale,
                     order_data.customer.model_dump_json(),
                     order_data.recipient.model_dump_json() if order_data.recipient else None,
                     order_data.pickup,
@@ -38,6 +40,19 @@ async def insert_order(conn, order_data: OrderData, status: str = "pending"):
     except Exception as e:
         await conn.rollback()
         raise e
+
+
+async def get_order_by_id(conn, order_id: str) -> dict | None:
+    """Return the full order row as a dict, or None if not found."""
+    async with conn.cursor() as cur:
+        await cur.execute(
+            'SELECT "orderID", status, locale, customer, recipient, pickup, '
+            '"orderForMyself", items, subtotal, "deliveryFee", total, moms, '
+            '"createdAt" FROM orders WHERE "orderID"=%s',
+            (order_id,),
+        )
+        row = await cur.fetchone()
+        return dict(row) if row else None
 
 
 async def get_order_status(conn, order_id: str) -> str | None:

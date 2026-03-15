@@ -17,11 +17,11 @@ class CustomerModel(BaseModel):
 
 
 class RecipientModel(BaseModel):
-    """Delivery recipient. Required when pickup=false and orderForMyself=false."""
-    firstName: str = Field(min_length=1, max_length=100)
-    lastName: str = Field(min_length=1, max_length=100)
-    phone: str = Field(min_length=1, max_length=30)
-    address: str = Field(min_length=1, max_length=300)
+    """Delivery recipient. Always present with date/time; name/phone/address conditional."""
+    firstName: str = Field(max_length=100, default="")
+    lastName: str = Field(max_length=100, default="")
+    phone: str = Field(max_length=30, default="")
+    address: str = Field(max_length=300, default="")
     date: str = Field(min_length=1, max_length=20)
     time: str = Field(min_length=1, max_length=10)
 
@@ -32,6 +32,7 @@ OrderStatus = Literal["pending", "paid", "expired", "failed", "cancelled"]
 
 class OrderData(BaseModel):
     orderID: str = Field(min_length=1, max_length=64, pattern=r"^[\w\-]+$")
+    locale: str = Field(default="en", max_length=10)
     customer: CustomerModel
     recipient: RecipientModel | None = None
     pickup: bool

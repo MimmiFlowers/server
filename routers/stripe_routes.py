@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException, Request, Depends
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from database.dbconfig.dbconfig import get_db_connection
-from database.orders import insert_order, update_order_status, get_order_status
+from database.orders import insert_order, update_order_status, get_order_status, get_order_by_id
 from database.products import get_product_prices_by_names
 from services.mailing import send_order_confirmation
 from config import settings
@@ -164,7 +164,11 @@ async def stripe_webhook(request: Request, conn=Depends(get_db_connection)):
         try:
             customer_email = session.get("customer_details", {}).get("email")
             if customer_email:
-                await send_order_confirmation(customer_email, order_id)
+                order_data = await get_order_by_id(conn, order_id)
+                if order_data:
+                    await send_order_confirmation(customer_email, order_data)
+                else:
+                    logger.warning("Order %s not found for email, skipping confirmation", order_id)
             else:
                 logger.warning("No customer email for order %s, skipping confirmation", order_id)
         except Exception as e:
