@@ -3,5 +3,4 @@
 /assets
 .env*
 !.env.example
-Dockerfile
 .DS_Store

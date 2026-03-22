@@ -2,9 +2,9 @@ name: Server CI
 
 on:
   push:
-    branches: [main, AgentProdFixedVersion]
+    branches: [main, staging, AgentProdFixedVersion]
   pull_request:
-    branches: [main]
+    branches: [main, staging]
 
 jobs:
   test:
