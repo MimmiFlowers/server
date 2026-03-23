@@ -22,6 +22,7 @@ limiter = Limiter(key_func=get_remote_address)
 
 # Delivery fee in SEK (must match client-side constant)
 DELIVERY_FEE_SEK = 99
+FREE_DELIVERY_THRESHOLD_SEK = 999
 # Swedish VAT rate
 VAT_RATE = 0.25
 
@@ -70,9 +71,9 @@ async def create_checkout_session(request: Request, data: CheckoutRequest, conn=
             "quantity": item.quantity,
         })
 
-    # Add delivery fee if not pickup
+    # Add delivery fee only when not pickup AND subtotal is below threshold
     delivery_fee_ore = 0
-    if not data.orderData.pickup:
+    if not data.orderData.pickup and subtotal_ore < FREE_DELIVERY_THRESHOLD_SEK * 100:
         delivery_fee_ore = DELIVERY_FEE_SEK * 100
         line_items.append({
             "price_data": {
