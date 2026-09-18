@@ -6,14 +6,17 @@ import uuid
 import stripe
 import httpx
 from datetime import datetime
-from routers.classes.classes import CheckoutRequest
 from fastapi import APIRouter, HTTPException, Request, Depends
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from database.dbconfig.dbconfig import get_db_connection
 from database.orders import insert_order, update_order_status, get_order_status, get_order_by_id
 from database.products import get_product_prices_by_names
+from database.wreath import get_wreath_catalog, get_wreath_design
+from routers.classes.classes import CheckoutRequest, WreathSpec
 from services.mailing import send_order_confirmation
+from services.wreath import DISPLAY_NAME, WreathSpecError, describe_summary, image_url, validate_and_price
+from services.wreath import order_item as wreath_order_item
 from config import settings
 
 logger = logging.getLogger(__name__)
@@ -42,8 +45,13 @@ stripe.api_key = settings.STRIPE_SECRET_KEY
 @limiter.limit("10/minute")
 async def create_checkout_session(request: Request, data: CheckoutRequest, conn=Depends(get_db_connection)):
     # --- Server-side price validation ---
-    # Look up real prices from DB instead of trusting client-supplied values
-    product_names = [item.name for item in data.items]
+    # Catalogue products are priced by name from `products`; custom wreaths
+    # (lines with a designID) are priced from wreath_designs + the live option
+    # tables. Client-supplied prices are never used for either.
+    product_items = [item for item in data.items if item.designID is None]
+    wreath_items = [item for item in data.items if item.designID is not None]
+
+    product_names = [item.name for item in product_items]
     db_prices = await get_product_prices_by_names(conn, product_names)
 
     # Verify all products exist
@@ -58,7 +66,7 @@ async def create_checkout_session(request: Request, data: CheckoutRequest, conn=
     line_items = []
     subtotal_ore = 0  # in öre (SEK * 100)
 
-    for item in data.items:
+    for item in product_items:
         # DB price is NUMERIC(10,2) in SEK → convert to öre (int)
         price_ore = int(db_prices[item.name] * 100)
         subtotal_ore += price_ore * item.quantity
@@ -70,6 +78,51 @@ async def create_checkout_session(request: Request, data: CheckoutRequest, conn=
             },
             "quantity": item.quantity,
         })
+
+    if wreath_items:
+        catalog = await get_wreath_catalog(conn)
+        locale = data.orderData.locale
+        lang = "sv" if locale.startswith("sv") else "en"
+        server_wreath_entries = []
+        for item in wreath_items:
+            design = await get_wreath_design(conn, item.designID)
+            if design is None:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Custom wreath not found. Please build it again.",
+                )
+            try:
+                priced = validate_and_price(WreathSpec(**design["spec"]), catalog)
+            except WreathSpecError:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Your custom wreath contains an option that is no longer available. Please build it again.",
+                )
+            price_ore = int(priced["price"] * 100)
+            subtotal_ore += price_ore * item.quantity
+            product_data = {
+                "name": DISPLAY_NAME[lang],
+                "description": describe_summary(priced["summary"], lang)[:480],
+            }
+            picture = image_url(item.designID)
+            if design["hasImage"] and picture.startswith("https://"):
+                product_data["images"] = [picture]  # Stripe must be able to fetch it publicly
+            line_items.append({
+                "price_data": {
+                    "currency": "sek",
+                    "product_data": product_data,
+                    "unit_amount": price_ore,
+                },
+                "quantity": item.quantity,
+            })
+            server_wreath_entries.append(
+                wreath_order_item(item.designID, priced, item.quantity, locale, design["hasImage"])
+            )
+        # Replace the client's wreath entries with server-built ones so the
+        # receipt and the shop notification never show client-controlled text.
+        data.orderData.items = [
+            entry for entry in data.orderData.items if not entry.get("designID")
+        ] + server_wreath_entries
 
     # Add delivery fee only when not pickup AND subtotal is below threshold
     delivery_fee_ore = 0
