@@ -91,12 +91,16 @@ async def get_wreath_design(conn, design_id: str) -> dict | None:
 async def get_wreath_design_image(conn, design_id: str) -> bytes | None:
     """PNG bytes for GET /data/wreath/designs/{id}/image, or None if the design or
     its image is missing."""
-    async with conn.cursor() as cur:
-        await cur.execute(
-            'SELECT image FROM wreath_designs WHERE "designID" = %s::uuid',
-            (design_id,),
-        )
-        row = await cur.fetchone()
-    if not row or row["image"] is None:
-        return None
-    return row["image"]  # psycopg 3 already returns bytea as bytes
+    try:
+        async with conn.cursor() as cur:
+            await cur.execute(
+                'SELECT image FROM wreath_designs WHERE "designID" = %s::uuid',
+                (design_id,),
+            )
+            row = await cur.fetchone()
+        if not row or row["image"] is None:
+            return None
+        return row["image"]  # psycopg 3 already returns bytea as bytes
+    except Exception as e:
+        await conn.rollback()
+        raise e

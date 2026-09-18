@@ -90,3 +90,17 @@ def test_malformed_wreath_does_not_break_email():
     for rendered in (body, text):
         assert "Plain bouquet" in rendered
         assert "Odd wreath" in rendered
+
+
+def test_line_totals_have_no_float_artefacts():
+    order = _order("en")
+    order["items"] = [
+        {"name": "Fractional wreath", "quantity": 7, "price": 449.99},
+        {"name": "Whole bouquet", "quantity": 1, "price": 1200},
+    ]
+    body = _build_html_body(order)
+    text = _build_plain_text(order)
+    for rendered in (body, text):
+        assert "3,149.93 kr" in rendered
+        assert "1,200 kr" in rendered
+        assert "3149.9299" not in rendered

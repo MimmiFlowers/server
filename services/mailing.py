@@ -122,6 +122,12 @@ def _fmt_sek(ore: int) -> str:
     return f"{ore / 100:,.2f} kr"
 
 
+def _fmt_line_total(price, qty) -> str:
+    """Whole SEK prints as '1,200 kr'; fractional as '449.99 kr' — never a float artefact."""
+    total = round(float(price) * qty, 2)
+    return f"{int(total):,} kr" if total == int(total) else f"{total:,.2f} kr"
+
+
 # ── Shared helpers to parse order fields ──────────────────────────
 def _parse_order(order: dict) -> dict:
     """Normalise JSON-string fields into dicts/lists."""
@@ -200,7 +206,7 @@ def _build_item_row(item: dict, locale: str) -> str:
     qty = item.get("quantity", 1)
     price = item.get("price", 0)
     picture = item.get("picture", "")
-    line_total = price * qty
+    line_total = _fmt_line_total(price, qty)
 
     img_html = ""
     if picture:
@@ -236,7 +242,7 @@ def _build_item_row(item: dict, locale: str) -> str:
       </td>
       <td style="padding:12px 0;border-bottom:1px solid {_BORDER};vertical-align:middle;text-align:right;">
         <p style="margin:0;font-size:14px;font-weight:600;color:{_TEXT_DARK};">
-          {line_total:,} kr
+          {line_total}
         </p>
       </td>
     </tr>"""
@@ -598,7 +604,7 @@ def _build_plain_text(order: dict) -> str:
         item_name = item.get("name", "Product")
         qty = item.get("quantity", 1)
         price = item.get("price", 0)
-        lines.append(f"  {item_name} x{qty} — {price * qty:,} kr")
+        lines.append(f"  {item_name} x{qty} — {_fmt_line_total(price, qty)}")
         wreath = item.get("wreath")
         if isinstance(wreath, dict):
             lines.extend("      " + line for line in _wreath_lines(wreath, loc))
