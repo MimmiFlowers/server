@@ -8,7 +8,7 @@ from datetime import datetime
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.utils import formataddr
-from config import settings
+from config import settings, SITE_URL as _SITE_URL
 
 logger = logging.getLogger(__name__)
 
@@ -17,9 +17,6 @@ SMTP_TIMEOUT = 10
 
 # Basic email format validation
 _EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
-
-# Derive base site URL from SUCCESS_URL (strip trailing /Success/)
-_SITE_URL = settings.SUCCESS_URL.rsplit("/Success/", 1)[0] or "https://mimmiflowers.se"
 
 # Store pickup address
 _PICKUP_ADDRESS = "Rågsved torg, Bandhagen"

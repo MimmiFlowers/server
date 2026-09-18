@@ -2,10 +2,36 @@ from pydantic import BaseModel, EmailStr, Field
 from typing import Literal
 
 
+_OPTION_CODE = r"^[a-z0-9\-]{1,40}$"
+_UUID = r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+
+
 class CartItem(BaseModel):
     name: str
     price: int = Field(ge=1, description="Price in öre (smallest currency unit)")
     quantity: int = Field(ge=1, le=99, description="Quantity must be 1-99")
+    # Set for custom wreath lines. The server then ignores `name`/`price` and
+    # prices the line from wreath_designs + the live option tables.
+    designID: str | None = Field(default=None, pattern=_UUID)
+
+
+class WreathPlacement(BaseModel):
+    slot: int = Field(ge=0, le=63, description="0-based slot index, clockwise from the bow")
+    code: str = Field(pattern=_OPTION_CODE)
+
+
+class WreathSpec(BaseModel):
+    """What the customer chose. Codes reference the wreath_* option tables."""
+    sizeCode: str = Field(pattern=_OPTION_CODE)
+    materialCode: str = Field(pattern=_OPTION_CODE)
+    bandCode: str | None = Field(default=None, pattern=_OPTION_CODE)
+    decorations: list[WreathPlacement] = Field(default_factory=list, max_length=64)
+
+
+class WreathDesignRequest(BaseModel):
+    spec: WreathSpec
+    # PNG data URL rendered by the browser; optional so a failed render never blocks a sale.
+    image: str | None = Field(default=None, max_length=700_000)
 
 
 class CustomerModel(BaseModel):

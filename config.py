@@ -114,3 +114,9 @@ CORS_ORIGINS: list[str] = [
     ).split(",")
     if origin.strip()
 ]
+
+# SITE_URL: public origin of the shop, derived from SUCCESS_URL
+# ("https://stg.mimmiflowers.se/Success/" → "https://stg.mimmiflowers.se").
+# Used wherever an absolute URL must leave the server: wreath pictures in
+# emails, Telegram photos and Stripe line-item images.
+SITE_URL: str = settings.SUCCESS_URL.rsplit("/Success/", 1)[0].rstrip("/") or "https://mimmiflowers.se"
