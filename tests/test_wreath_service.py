@@ -10,8 +10,10 @@ import pytest
 from routers.classes.classes import WreathSpec
 from services.wreath import (
     WreathSpecError,
+    catalog_for_client,
     decode_png_data_url,
     describe_summary,
+    order_item,
     validate_and_price,
 )
 
@@ -96,13 +98,13 @@ def test_summary_is_bilingual_sorted_by_slot_and_one_based():
 @pytest.mark.parametrize(
     "overrides, message",
     [
-        ({"sizeCode": "xl"}, "size"),
-        ({"materialCode": "gold"}, "material"),
-        ({"sizeCode": "m", "materialCode": "moss"}, "combination"),
-        ({"bandCode": "blue"}, "band"),
-        ({"decorations": [{"slot": 0, "code": "unicorn"}]}, "decoration"),
-        ({"decorations": [{"slot": 6, "code": "pine-cone"}]}, "Slot 7"),
-        ({"decorations": [{"slot": 2, "code": "star"}, {"slot": 2, "code": "pine-cone"}]}, "twice"),
+        ({"sizeCode": "xl"}, "Unknown wreath size"),
+        ({"materialCode": "gold"}, "Unknown wreath material"),
+        ({"sizeCode": "m", "materialCode": "moss"}, "combination is not available"),
+        ({"bandCode": "blue"}, "Unknown band"),
+        ({"decorations": [{"slot": 0, "code": "unicorn"}]}, "Unknown decoration"),
+        ({"decorations": [{"slot": 6, "code": "pine-cone"}]}, "Slot 7 does not exist"),
+        ({"decorations": [{"slot": 2, "code": "star"}, {"slot": 2, "code": "pine-cone"}]}, "Slot 3 is used twice"),
     ],
 )
 def test_rejects_invalid_specs(overrides, message):
@@ -147,3 +149,41 @@ def test_rejects_oversized_dimensions():
 def test_rejects_oversized_payload():
     with pytest.raises(WreathSpecError, match="too large"):
         decode_png_data_url(_data_url(_png() + b"\x00" * 600_000))
+
+
+def test_rejects_png_whose_first_chunk_is_not_ihdr():
+    fake = b"\x89PNG\r\n\x1a\n" + struct.pack(">I", 13) + b"tEXt" + b"\x00" * 13 + b"\x00" * 8
+    with pytest.raises(WreathSpecError, match="not a PNG"):
+        decode_png_data_url(_data_url(fake))
+
+
+# ── order_item / catalog_for_client ───────────────────────────────
+
+def test_order_item_uses_int_for_whole_sek_and_float_otherwise():
+    priced = validate_and_price(_spec(), CATALOG)
+    item = order_item("abc", priced, 2, "sv-SE", has_image=True)
+    assert item == {
+        "id": "wreath-abc",
+        "name": "Egen julkrans",
+        "quantity": 2,
+        "price": 378,
+        "picture": "http://localhost:3000/data/wreath/designs/abc/image",
+        "designID": "abc",
+        "wreath": priced["summary"],
+    }
+    assert isinstance(item["price"], int)
+    fractional = {"price": Decimal("299.50"), "summary": priced["summary"]}
+    assert order_item("abc", fractional, 1, "en", has_image=False)["price"] == 299.5
+    assert order_item("abc", fractional, 1, "en", has_image=False)["picture"] == ""
+    assert order_item("abc", priced, 1, "en", has_image=True)["name"] == "Custom Christmas wreath"
+
+
+def test_catalog_for_client_resolves_language_and_nests_base_prices():
+    sv = catalog_for_client(CATALOG, "sv")
+    assert sv["sizes"][0] == {"code": "s", "name": "Liten", "diameterCm": 25, "slotCount": 6}
+    assert sv["materials"][1]["name"] == "Mossa"
+    assert sv["basePrices"] == {"s": {"fir": 299.0, "moss": 349.0}, "m": {"fir": 399.0}}
+    assert sv["bands"][0] == {"code": "red-velvet", "name": "Röd sammet", "image": "/wreath/band-red-velvet.svg", "price": 49.0}
+    assert sv["decorations"][1]["name"] == "Stjärna" and sv["decorations"][1]["price"] == 25.0
+    assert catalog_for_client(CATALOG, "en")["sizes"][0]["name"] == "Small"
+    assert catalog_for_client(CATALOG, "de")["sizes"][0]["name"] == "Small"  # unknown locale → en

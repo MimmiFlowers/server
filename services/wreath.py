@@ -3,7 +3,9 @@
 No database and no I/O here — everything takes the option catalogue as a dict
 (see database/wreath.get_wreath_catalog) so it is trivially unit-testable.
 
-Units: every price in and out of this module is SEK as Decimal.
+Units: every price in and out of this module is SEK as Decimal. Option prices in
+the catalog must already be Decimal (psycopg returns NUMERIC as Decimal); floats
+are never coerced here.
 """
 
 import base64
@@ -134,7 +136,13 @@ def decode_png_data_url(data_url: str) -> bytes:
         raise WreathSpecError("Image is not valid base64") from exc
     if len(raw) > MAX_IMAGE_BYTES:
         raise WreathSpecError("Image is too large")
-    if len(raw) < 24 or not raw.startswith(PNG_SIGNATURE):
+    # Signature, then the mandatory 13-byte IHDR chunk: length (4) + "IHDR" (4) + data.
+    if (
+        len(raw) < 24
+        or not raw.startswith(PNG_SIGNATURE)
+        or raw[8:12] != b"\x00\x00\x00\x0d"
+        or raw[12:16] != b"IHDR"
+    ):
         raise WreathSpecError("Image is not a PNG")
     width, height = struct.unpack(">II", raw[16:24])
     if not (0 < width <= MAX_IMAGE_SIDE and 0 < height <= MAX_IMAGE_SIDE):
