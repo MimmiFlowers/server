@@ -15,6 +15,7 @@ import os
 import sys
 import logging
 from dataclasses import dataclass, fields
+from urllib.parse import urlsplit
 from dotenv import load_dotenv
 
 logger = logging.getLogger(__name__)
@@ -119,4 +120,9 @@ CORS_ORIGINS: list[str] = [
 # ("https://stg.mimmiflowers.se/Success/" → "https://stg.mimmiflowers.se").
 # Used wherever an absolute URL must leave the server: wreath pictures in
 # emails, Telegram photos and Stripe line-item images.
-SITE_URL: str = settings.SUCCESS_URL.rsplit("/Success/", 1)[0].rstrip("/") or "https://mimmiflowers.se"
+_success = urlsplit(settings.SUCCESS_URL)
+if not _success.scheme or not _success.netloc:
+    sys.exit(
+        f"FATAL: SUCCESS_URL must be an absolute URL (got {settings.SUCCESS_URL!r})."
+    )
+SITE_URL: str = f"{_success.scheme}://{_success.netloc}"
