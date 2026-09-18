@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
-from routers import data_routes, stripe_routes, health
+from routers import data_routes, stripe_routes, health, wreath_routes
 from database.dbconfig.dbconfig import lifespan
 from config import ENV, CORS_ORIGINS
 
@@ -69,3 +69,4 @@ async def request_logging_middleware(request: Request, call_next):
 app.include_router(health.router)
 app.include_router(stripe_routes.router)
 app.include_router(data_routes.router)
+app.include_router(wreath_routes.router)
