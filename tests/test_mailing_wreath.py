@@ -47,13 +47,46 @@ def test_wreath_lines_without_decorations_en():
 
 
 def test_html_body_lists_options_escaped():
-    html = _build_html_body(_order("en"))
-    assert "Size: Small 25 cm" in html
-    assert "slot 4 of 6: Star &lt;b&gt;" in html
-    assert "Star <b>" not in html
+    body = _build_html_body(_order("en"))
+    assert "Size: Small 25 cm" in body
+    assert "slot 4 of 6: Star &lt;b&gt;" in body
+    assert "Star <b>" not in body
+    # Indented option lines are laid out with padding, and long names may wrap.
+    assert "padding-left:12px" in body
+    assert "white-space:pre" not in body
 
 
 def test_plain_text_lists_options():
     text = _build_plain_text(_order("sv"))
     assert "      Storlek: Liten 25 cm" in text
     assert "        plats 1 av 6: Kotte" in text
+
+
+def test_wreath_with_band_en():
+    lines = _wreath_lines({**WREATH, "band": {"en": "Gold", "sv": "Guld"}}, "en")
+    assert "Band: Gold" in lines
+
+
+def test_unknown_locale_falls_back_to_english():
+    assert _wreath_lines(WREATH, "de")[0] == "Size: Small 25 cm"
+
+
+def test_missing_sv_name_falls_back_to_en():
+    wreath = {**WREATH, "decorations": [{"slot": 2, "en": "Ribbon"}]}
+    assert "  plats 2 av 6: Ribbon" in _wreath_lines(wreath, "sv")
+
+
+def test_malformed_wreath_does_not_break_email():
+    order = _order("sv")
+    order["items"] = [
+        {"name": "Plain bouquet", "quantity": 1, "price": 100, "wreath": "garbage"},
+        {
+            "name": "Odd wreath", "quantity": 1, "price": 200,
+            "wreath": {"decorations": ["x", None], "size": "big"},
+        },
+    ]
+    body = _build_html_body(order)
+    text = _build_plain_text(order)
+    for rendered in (body, text):
+        assert "Plain bouquet" in rendered
+        assert "Odd wreath" in rendered

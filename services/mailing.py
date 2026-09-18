@@ -103,9 +103,14 @@ _I18N: dict[str, dict[str, str]] = {
 }
 
 
+def _lang(locale: str) -> str:
+    """Map a locale tag onto one of the two supported languages."""
+    return "sv" if locale.startswith("sv") else "en"
+
+
 def _t(locale: str, key: str, **kwargs: str) -> str:
     """Look up a translated string. Falls back to English."""
-    lang = "sv" if locale.startswith("sv") else "en"
+    lang = _lang(locale)
     text = _I18N.get(lang, _I18N["en"]).get(key, _I18N["en"].get(key, key))
     if kwargs:
         text = text.format(**kwargs)
@@ -155,13 +160,16 @@ def _wreath_lines(wreath: dict, locale: str) -> list[str]:
     `wreath` is the summary the server stored in orders.items (see
     services/wreath.order_item): bilingual names, 1-based slots.
     """
-    lang = "sv" if locale.startswith("sv") else "en"
+    lang = _lang(locale)
 
-    def name(obj: dict | None) -> str:
-        obj = obj or {}
+    def name(obj: object) -> str:
+        if not isinstance(obj, dict):
+            return ""
         return obj.get(lang) or obj.get("en") or ""
 
-    size = wreath.get("size") or {}
+    size = wreath.get("size")
+    if not isinstance(size, dict):
+        size = {}
     lines = [
         f"{_t(locale, 'wreath_size')}: {name(size)}",
         f"{_t(locale, 'wreath_material')}: {name(wreath.get('material'))}",
@@ -171,9 +179,14 @@ def _wreath_lines(wreath: dict, locale: str) -> list[str]:
     if not decorations:
         lines.append(f"{_t(locale, 'wreath_decorations')}: {_t(locale, 'wreath_no_decorations')}")
         return lines
-    total = str(size.get("slotCount", len(decorations)))
+    total = str(
+        size.get("slotCount")
+        or max((d.get("slot", 0) for d in decorations if isinstance(d, dict)), default=len(decorations))
+    )
     lines.append(f"{_t(locale, 'wreath_decorations')}:")
     for d in decorations:
+        if not isinstance(d, dict):
+            continue
         slot = _t(locale, "wreath_slot", n=str(d.get("slot", "")), total=total)
         lines.append(f"  {slot}: {name(d)}")
     return lines
@@ -198,11 +211,14 @@ def _build_item_row(item: dict, locale: str) -> str:
         )
 
     details_html = ""
-    if item.get("wreath"):
-        details_html = "".join(
-            f'<p style="margin:2px 0 0;font-size:12px;color:{_TEXT_LIGHT};white-space:pre;">{html.escape(line)}</p>'
-            for line in _wreath_lines(item["wreath"], locale)
-        )
+    wreath = item.get("wreath")
+    if isinstance(wreath, dict):
+        for line in _wreath_lines(wreath, locale):
+            indent = "padding-left:12px;" if line.startswith("  ") else ""
+            details_html += (
+                f'<p style="margin:2px 0 0;{indent}font-size:12px;color:{_TEXT_LIGHT};">'
+                f"{html.escape(line.lstrip())}</p>"
+            )
 
     return f"""\
     <tr>
@@ -583,8 +599,9 @@ def _build_plain_text(order: dict) -> str:
         qty = item.get("quantity", 1)
         price = item.get("price", 0)
         lines.append(f"  {item_name} x{qty} — {price * qty:,} kr")
-        if item.get("wreath"):
-            lines.extend("      " + line for line in _wreath_lines(item["wreath"], loc))
+        wreath = item.get("wreath")
+        if isinstance(wreath, dict):
+            lines.extend("      " + line for line in _wreath_lines(wreath, loc))
 
     lines.append("-" * 40)
     lines.append(f"  {_t(loc, 'subtotal')}: {_fmt_sek(subtotal)}")

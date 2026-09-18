@@ -50,6 +50,8 @@ def validate_and_price(spec: WreathSpec, catalog: dict) -> dict:
     Returns {"price": Decimal, "summary": {...}} where summary is the bilingual,
     human-readable form stored in orders.items and rendered by email + bot.
     Summary slots are 1-based; spec slots are 0-based.
+    Slot i of a size with slotCount n sits at angle (i + 0.5) * 360 / n clockwise
+    from the top (the bow); the client's wreathGeometry.ts implements the same rule.
     """
     sizes = _by_code(catalog["sizes"])
     materials = _by_code(catalog["materials"])
