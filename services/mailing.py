@@ -1,4 +1,5 @@
 import asyncio
+import html
 import json
 import re
 import smtplib
@@ -59,6 +60,13 @@ _I18N: dict[str, dict[str, str]] = {
         "your_details":     "Your Details",
         "visit_shop":       "Visit Our Shop",
         "questions":        "Questions about your order? Contact us at",
+        "wreath_size":           "Size",
+        "wreath_material":       "Material",
+        "wreath_band":           "Band",
+        "wreath_band_none":      "none",
+        "wreath_decorations":    "Decorations",
+        "wreath_no_decorations": "none",
+        "wreath_slot":           "slot {n} of {total}",
     },
     "sv": {
         "subject":          "Orderbekräftelse",
@@ -84,6 +92,13 @@ _I18N: dict[str, dict[str, str]] = {
         "your_details":     "Dina uppgifter",
         "visit_shop":       "Besök vår butik",
         "questions":        "Frågor om din beställning? Kontakta oss på",
+        "wreath_size":           "Storlek",
+        "wreath_material":       "Material",
+        "wreath_band":           "Band",
+        "wreath_band_none":      "inget",
+        "wreath_decorations":    "Dekorationer",
+        "wreath_no_decorations": "inga",
+        "wreath_slot":           "plats {n} av {total}",
     },
 }
 
@@ -134,6 +149,36 @@ def _customer_name(customer: dict) -> str:
     return f"{customer.get('firstName', '')} {customer.get('lastName', '')}".strip()
 
 
+def _wreath_lines(wreath: dict, locale: str) -> list[str]:
+    """Human-readable option lines for a custom wreath item (plain, unescaped).
+
+    `wreath` is the summary the server stored in orders.items (see
+    services/wreath.order_item): bilingual names, 1-based slots.
+    """
+    lang = "sv" if locale.startswith("sv") else "en"
+
+    def name(obj: dict | None) -> str:
+        obj = obj or {}
+        return obj.get(lang) or obj.get("en") or ""
+
+    size = wreath.get("size") or {}
+    lines = [
+        f"{_t(locale, 'wreath_size')}: {name(size)}",
+        f"{_t(locale, 'wreath_material')}: {name(wreath.get('material'))}",
+        f"{_t(locale, 'wreath_band')}: {name(wreath.get('band')) or _t(locale, 'wreath_band_none')}",
+    ]
+    decorations = wreath.get("decorations") or []
+    if not decorations:
+        lines.append(f"{_t(locale, 'wreath_decorations')}: {_t(locale, 'wreath_no_decorations')}")
+        return lines
+    total = str(size.get("slotCount", len(decorations)))
+    lines.append(f"{_t(locale, 'wreath_decorations')}:")
+    for d in decorations:
+        slot = _t(locale, "wreath_slot", n=str(d.get("slot", "")), total=total)
+        lines.append(f"  {slot}: {name(d)}")
+    return lines
+
+
 # ── HTML builder ──────────────────────────────────────────────────
 
 def _build_item_row(item: dict, locale: str) -> str:
@@ -152,6 +197,13 @@ def _build_item_row(item: dict, locale: str) -> str:
             f'style="display:block;border-radius:8px;object-fit:cover;" />'
         )
 
+    details_html = ""
+    if item.get("wreath"):
+        details_html = "".join(
+            f'<p style="margin:2px 0 0;font-size:12px;color:{_TEXT_LIGHT};white-space:pre;">{html.escape(line)}</p>'
+            for line in _wreath_lines(item["wreath"], locale)
+        )
+
     return f"""\
     <tr>
       <td style="padding:12px 0;border-bottom:1px solid {_BORDER};vertical-align:middle;" width="64">
@@ -164,6 +216,7 @@ def _build_item_row(item: dict, locale: str) -> str:
         <p style="margin:2px 0 0;font-size:12px;color:{_TEXT_MUTED};">
           {_t(locale, "qty")}: {qty}
         </p>
+        {details_html}
       </td>
       <td style="padding:12px 0;border-bottom:1px solid {_BORDER};vertical-align:middle;text-align:right;">
         <p style="margin:0;font-size:14px;font-weight:600;color:{_TEXT_DARK};">
@@ -530,6 +583,8 @@ def _build_plain_text(order: dict) -> str:
         qty = item.get("quantity", 1)
         price = item.get("price", 0)
         lines.append(f"  {item_name} x{qty} — {price * qty:,} kr")
+        if item.get("wreath"):
+            lines.extend("      " + line for line in _wreath_lines(item["wreath"], loc))
 
     lines.append("-" * 40)
     lines.append(f"  {_t(loc, 'subtotal')}: {_fmt_sek(subtotal)}")
