@@ -3,7 +3,7 @@ from typing import Literal
 
 
 _OPTION_CODE = r"^[a-z0-9\-]{1,40}$"
-_UUID = r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+UUID_PATTERN = r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 
 
 class CartItem(BaseModel):
@@ -12,7 +12,7 @@ class CartItem(BaseModel):
     quantity: int = Field(ge=1, le=99, description="Quantity must be 1-99")
     # Set for custom wreath lines. The server then ignores `name`/`price` and
     # prices the line from wreath_designs + the live option tables.
-    designID: str | None = Field(default=None, pattern=_UUID)
+    designID: str | None = Field(default=None, pattern=UUID_PATTERN)
 
 
 class WreathPlacement(BaseModel):

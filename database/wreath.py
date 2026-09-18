@@ -1,6 +1,7 @@
 """SQL for the wreath builder. All prices are SEK Decimals (NUMERIC(10,2))."""
 
 import json
+from decimal import Decimal
 
 
 async def get_wreath_catalog(conn) -> dict:
@@ -52,7 +53,11 @@ async def get_wreath_catalog(conn) -> dict:
         raise e
 
 
-async def insert_wreath_design(conn, design_id: str, spec: dict, price, image: bytes | None) -> None:
+async def insert_wreath_design(
+    conn, design_id: str, spec: dict, price: Decimal, image: bytes | None
+) -> None:
+    """design_id is minted by the caller (uuid4 in the router), spec is the validated
+    `WreathSpec.model_dump()`, price is SEK."""
     try:
         async with conn.cursor() as cur:
             await cur.execute(
@@ -68,18 +73,24 @@ async def insert_wreath_design(conn, design_id: str, spec: dict, price, image: b
 
 async def get_wreath_design(conn, design_id: str) -> dict | None:
     """Spec + stored price + whether an image exists. Never loads the image bytes."""
-    async with conn.cursor() as cur:
-        await cur.execute(
-            'SELECT "designID"::text AS "designID", spec, price, '
-            '(image IS NOT NULL) AS "hasImage" '
-            'FROM wreath_designs WHERE "designID" = %s::uuid',
-            (design_id,),
-        )
-        row = await cur.fetchone()
-    return dict(row) if row else None
+    try:
+        async with conn.cursor() as cur:
+            await cur.execute(
+                'SELECT "designID"::text AS "designID", spec, price, '
+                '(image IS NOT NULL) AS "hasImage" '
+                'FROM wreath_designs WHERE "designID" = %s::uuid',
+                (design_id,),
+            )
+            row = await cur.fetchone()
+        return dict(row) if row else None
+    except Exception as e:
+        await conn.rollback()
+        raise e
 
 
 async def get_wreath_design_image(conn, design_id: str) -> bytes | None:
+    """PNG bytes for GET /data/wreath/designs/{id}/image, or None if the design or
+    its image is missing."""
     async with conn.cursor() as cur:
         await cur.execute(
             'SELECT image FROM wreath_designs WHERE "designID" = %s::uuid',
@@ -88,4 +99,4 @@ async def get_wreath_design_image(conn, design_id: str) -> bytes | None:
         row = await cur.fetchone()
     if not row or row["image"] is None:
         return None
-    return bytes(row["image"])
+    return row["image"]  # psycopg 3 already returns bytea as bytes

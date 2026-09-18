@@ -31,7 +31,7 @@ class WreathSpecError(ValueError):
     """
 
 
-def _lang(locale: str) -> str:
+def lang_for(locale: str) -> str:
     return "sv" if locale.startswith("sv") else "en"
 
 
@@ -113,7 +113,7 @@ def validate_and_price(spec: WreathSpec, catalog: dict) -> dict:
 def describe_summary(summary: dict, locale: str) -> str:
     """One-line description for the Stripe line item, e.g.
     'Small 25 cm · Fir · Red velvet · Pine cone ×2, Star ×1'."""
-    lang = _lang(locale)
+    lang = lang_for(locale)
     parts = [summary["size"][lang], summary["material"][lang]]
     if summary.get("band"):
         parts.append(summary["band"][lang])
@@ -160,7 +160,7 @@ def image_url(design_id: str) -> str:
 
 def catalog_for_client(catalog: dict, locale: str) -> dict:
     """Language-resolved, float-priced catalogue for GET /data/wreath/options."""
-    lang = _lang(locale)
+    lang = lang_for(locale)
 
     def name(row: dict) -> str:
         return _names(row)[lang]
@@ -198,7 +198,7 @@ def order_item(design_id: str, priced: dict, quantity: int, locale: str, has_ima
     price: Decimal = priced["price"]
     return {
         "id": f"wreath-{design_id}",
-        "name": DISPLAY_NAME[_lang(locale)],
+        "name": DISPLAY_NAME[lang_for(locale)],
         "quantity": quantity,
         "price": int(price) if price == price.to_integral_value() else float(price),
         "picture": image_url(design_id) if has_image else "",

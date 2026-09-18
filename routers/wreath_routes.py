@@ -10,7 +10,7 @@ from slowapi.util import get_remote_address
 
 from database.dbconfig.dbconfig import get_db_connection
 from database.wreath import get_wreath_catalog, get_wreath_design_image, insert_wreath_design
-from routers.classes.classes import WreathDesignRequest
+from routers.classes.classes import UUID_PATTERN, WreathDesignRequest
 from services.wreath import (
     WreathSpecError,
     catalog_for_client,
@@ -30,7 +30,7 @@ router = APIRouter(
     responses={404: {"description": "Not found"}},
 )
 
-_UUID_RE = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+_UUID_RE = re.compile(UUID_PATTERN)
 
 
 @router.get("/options")
@@ -96,5 +96,8 @@ async def get_design_image(design_id: str, conn=Depends(get_db_connection)):
     return Response(
         content=image,
         media_type="image/png",
-        headers={"Cache-Control": "public, max-age=31536000, immutable"},
+        headers={
+            "Cache-Control": "public, max-age=31536000, immutable",
+            "X-Content-Type-Options": "nosniff",
+        },
     )

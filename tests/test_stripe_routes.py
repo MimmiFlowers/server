@@ -9,6 +9,18 @@ from tests.conftest import FakeConnection
 from tests.test_wreath_service import CATALOG
 
 
+@pytest.fixture(autouse=True)
+def _fresh_stripe_limiter():
+    """Every test here hits /create_checkout_session from the same fake IP, and the
+    endpoint allows 10/minute; clear the in-memory counter so test count never
+    turns into spurious 429s."""
+    from routers.stripe_routes import limiter
+
+    limiter.reset()
+    yield
+    limiter.reset()
+
+
 def _checkout_payload(pickup: bool = False) -> dict:
     """Build a valid checkout request body."""
     return {
@@ -243,3 +255,124 @@ async def test_checkout_design_with_retired_option_is_400(client):
         response = await client.post("/stripe/create_checkout_session", json=payload)
     assert response.status_code == 400
     assert "no longer available" in response.json()["detail"]
+
+
+def _mock_stripe_session() -> MagicMock:
+    session = MagicMock()
+    session.id = "cs_test_123"
+    session.__getitem__ = lambda self, key: getattr(self, key, None)
+    return session
+
+
+def _wreath_only_payload(pickup: bool, *design_ids: str) -> dict:
+    payload = _checkout_payload(pickup=pickup)
+    payload["items"] = [
+        {"name": "x", "price": 1, "quantity": 1, "designID": did} for did in design_ids
+    ]
+    payload["orderData"]["items"] = [
+        {"id": f"wreath-{did}", "name": "x", "price": 1, "quantity": 1, "designID": did}
+        for did in design_ids
+    ]
+    return payload
+
+
+@pytest.mark.asyncio
+async def test_checkout_wreath_delivery_fee_applies(client):
+    """A 363 SEK wreath delivered to an address is under the free-delivery threshold."""
+    payload = _wreath_only_payload(False, DESIGN_ID)
+    assert payload["orderData"]["recipient"]["address"]
+
+    with (
+        patch("routers.stripe_routes.get_product_prices_by_names", new_callable=AsyncMock, return_value={}),
+        patch("routers.stripe_routes.get_wreath_catalog", new_callable=AsyncMock, return_value=CATALOG),
+        patch("routers.stripe_routes.get_wreath_design", new_callable=AsyncMock, return_value=_wreath_design_row()),
+        patch("routers.stripe_routes.insert_order", new_callable=AsyncMock) as insert_order,
+        patch("routers.stripe_routes.stripe.checkout.Session.create", return_value=_mock_stripe_session()) as create,
+    ):
+        response = await client.post("/stripe/create_checkout_session", json=payload)
+
+    assert response.status_code == 200
+    order_data = insert_order.await_args.args[1]
+    assert order_data.subtotal == 36300
+    assert order_data.deliveryFee == 9900
+    assert order_data.total == 46200
+    names = [li["price_data"]["product_data"]["name"] for li in create.call_args.kwargs["line_items"]]
+    assert names == ["Custom Christmas wreath", "Delivery Fee"]
+
+
+@pytest.mark.asyncio
+async def test_checkout_two_different_designs(client):
+    other_id = "223e4567-e89b-42d3-a456-426614174001"
+    other_row = {
+        "designID": other_id,
+        "spec": {"sizeCode": "m", "materialCode": "fir", "bandCode": None,
+                 "decorations": [{"slot": 2, "code": "star"}]},
+        "price": Decimal("424.00"),
+        "hasImage": False,
+    }
+    rows = {DESIGN_ID: _wreath_design_row(), other_id: other_row}
+    payload = _wreath_only_payload(True, DESIGN_ID, other_id)
+
+    with (
+        patch("routers.stripe_routes.get_product_prices_by_names", new_callable=AsyncMock, return_value={}),
+        patch("routers.stripe_routes.get_wreath_catalog", new_callable=AsyncMock, return_value=CATALOG),
+        patch("routers.stripe_routes.get_wreath_design", new_callable=AsyncMock,
+              side_effect=lambda conn, did: rows[did]),
+        patch("routers.stripe_routes.insert_order", new_callable=AsyncMock) as insert_order,
+        patch("routers.stripe_routes.stripe.checkout.Session.create", return_value=_mock_stripe_session()) as create,
+    ):
+        response = await client.post("/stripe/create_checkout_session", json=payload)
+
+    assert response.status_code == 200
+    amounts = [li["price_data"]["unit_amount"] for li in create.call_args.kwargs["line_items"]]
+    assert amounts == [36300, 42400]  # 299+49+15 and 399+25, in öre
+    order_data = insert_order.await_args.args[1]
+    assert order_data.subtotal == 36300 + 42400
+    assert [item["designID"] for item in order_data.items] == [DESIGN_ID, other_id]
+    assert [item["price"] for item in order_data.items] == [363, 424]
+
+
+@pytest.mark.asyncio
+async def test_checkout_wreath_image_attached_only_over_https(client):
+    """Stripe fetches product images itself, so only a public https URL is passed on."""
+    https_url = "https://stg.example/x.png"
+
+    async def _checkout(row: dict) -> dict:
+        with (
+            patch("routers.stripe_routes.get_product_prices_by_names", new_callable=AsyncMock, return_value={}),
+            patch("routers.stripe_routes.get_wreath_catalog", new_callable=AsyncMock, return_value=CATALOG),
+            patch("routers.stripe_routes.get_wreath_design", new_callable=AsyncMock, return_value=row),
+            patch("routers.stripe_routes.image_url", return_value=https_url),
+            patch("routers.stripe_routes.insert_order", new_callable=AsyncMock),
+            patch("routers.stripe_routes.stripe.checkout.Session.create", return_value=_mock_stripe_session()) as create,
+        ):
+            response = await client.post(
+                "/stripe/create_checkout_session", json=_wreath_only_payload(True, DESIGN_ID)
+            )
+        assert response.status_code == 200
+        return create.call_args.kwargs["line_items"][0]["price_data"]["product_data"]
+
+    product_data = await _checkout(_wreath_design_row())
+    assert product_data["images"] == [https_url]
+
+    row = _wreath_design_row()
+    row["hasImage"] = False
+    product_data = await _checkout(row)
+    assert "images" not in product_data
+
+
+@pytest.mark.asyncio
+async def test_checkout_wreath_db_failure_is_500(client):
+    with (
+        patch("routers.stripe_routes.get_product_prices_by_names", new_callable=AsyncMock, return_value={}),
+        patch("routers.stripe_routes.get_wreath_catalog", new_callable=AsyncMock, return_value=CATALOG),
+        patch("routers.stripe_routes.get_wreath_design", new_callable=AsyncMock,
+              side_effect=RuntimeError("db down")),
+        patch("routers.stripe_routes.insert_order", new_callable=AsyncMock) as insert_order,
+    ):
+        response = await client.post(
+            "/stripe/create_checkout_session", json=_wreath_only_payload(True, DESIGN_ID)
+        )
+    assert response.status_code == 500
+    assert response.json()["detail"] == "Internal server error"
+    insert_order.assert_not_awaited()

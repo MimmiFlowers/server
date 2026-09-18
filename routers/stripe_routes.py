@@ -15,7 +15,14 @@ from database.products import get_product_prices_by_names
 from database.wreath import get_wreath_catalog, get_wreath_design
 from routers.classes.classes import CheckoutRequest, WreathSpec
 from services.mailing import send_order_confirmation
-from services.wreath import DISPLAY_NAME, WreathSpecError, describe_summary, image_url, validate_and_price
+from services.wreath import (
+    DISPLAY_NAME,
+    WreathSpecError,
+    describe_summary,
+    image_url,
+    lang_for,
+    validate_and_price,
+)
 from services.wreath import order_item as wreath_order_item
 from config import settings
 
@@ -28,6 +35,8 @@ DELIVERY_FEE_SEK = 99
 FREE_DELIVERY_THRESHOLD_SEK = 999
 # Swedish VAT rate
 VAT_RATE = 0.25
+# Stripe product descriptions are short; keep the wreath option list well under any limit
+_STRIPE_DESCRIPTION_MAX = 480
 
 # Bot notification URL — optional; if not set, notifications are silently skipped
 BOT_NOTIFICATION_URL = os.environ.get("BOT_NOTIFICATION_URL", "")
@@ -39,6 +48,64 @@ router = APIRouter(
 )
 
 stripe.api_key = settings.STRIPE_SECRET_KEY
+
+
+async def _price_wreath_lines(conn, wreath_items, locale: str) -> tuple[list[dict], list[dict], int]:
+    """Price custom wreath lines from their stored designs + the live option tables.
+
+    Returns (stripe_line_items, order_item_entries, subtotal_delta_ore). Raises
+    HTTPException(400) with a customer-safe message when a design is missing or
+    references a retired option. Client-supplied name/price are never used.
+    """
+    try:
+        catalog = await get_wreath_catalog(conn)
+    except Exception as e:
+        logger.error("Failed to load wreath options for checkout: %s", e)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+    lang = lang_for(locale)
+    line_items: list[dict] = []
+    order_entries: list[dict] = []
+    subtotal_ore = 0
+    for item in wreath_items:
+        try:
+            design = await get_wreath_design(conn, item.designID)
+        except Exception as e:
+            logger.error("Failed to load wreath design %s for checkout: %s", item.designID, e)
+            raise HTTPException(status_code=500, detail="Internal server error")
+        if design is None:
+            raise HTTPException(
+                status_code=400,
+                detail="Custom wreath not found. Please build it again.",
+            )
+        try:
+            priced = validate_and_price(WreathSpec(**design["spec"]), catalog)
+        except WreathSpecError:
+            raise HTTPException(
+                status_code=400,
+                detail="Your custom wreath contains an option that is no longer available. Please build it again.",
+            )
+        price_ore = int(priced["price"] * 100)
+        subtotal_ore += price_ore * item.quantity
+        product_data = {
+            "name": DISPLAY_NAME[lang],
+            "description": describe_summary(priced["summary"], lang)[:_STRIPE_DESCRIPTION_MAX],
+        }
+        picture = image_url(item.designID)
+        if design["hasImage"] and picture.startswith("https://"):
+            product_data["images"] = [picture]  # Stripe must be able to fetch it publicly
+        line_items.append({
+            "price_data": {
+                "currency": "sek",
+                "product_data": product_data,
+                "unit_amount": price_ore,
+            },
+            "quantity": item.quantity,
+        })
+        order_entries.append(
+            wreath_order_item(item.designID, priced, item.quantity, locale, design["hasImage"])
+        )
+    return line_items, order_entries, subtotal_ore
 
 
 @router.post("/create_checkout_session")
@@ -80,44 +147,11 @@ async def create_checkout_session(request: Request, data: CheckoutRequest, conn=
         })
 
     if wreath_items:
-        catalog = await get_wreath_catalog(conn)
-        locale = data.orderData.locale
-        lang = "sv" if locale.startswith("sv") else "en"
-        server_wreath_entries = []
-        for item in wreath_items:
-            design = await get_wreath_design(conn, item.designID)
-            if design is None:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Custom wreath not found. Please build it again.",
-                )
-            try:
-                priced = validate_and_price(WreathSpec(**design["spec"]), catalog)
-            except WreathSpecError:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Your custom wreath contains an option that is no longer available. Please build it again.",
-                )
-            price_ore = int(priced["price"] * 100)
-            subtotal_ore += price_ore * item.quantity
-            product_data = {
-                "name": DISPLAY_NAME[lang],
-                "description": describe_summary(priced["summary"], lang)[:480],
-            }
-            picture = image_url(item.designID)
-            if design["hasImage"] and picture.startswith("https://"):
-                product_data["images"] = [picture]  # Stripe must be able to fetch it publicly
-            line_items.append({
-                "price_data": {
-                    "currency": "sek",
-                    "product_data": product_data,
-                    "unit_amount": price_ore,
-                },
-                "quantity": item.quantity,
-            })
-            server_wreath_entries.append(
-                wreath_order_item(item.designID, priced, item.quantity, locale, design["hasImage"])
-            )
+        wreath_lines, server_wreath_entries, wreath_ore = await _price_wreath_lines(
+            conn, wreath_items, data.orderData.locale
+        )
+        line_items.extend(wreath_lines)
+        subtotal_ore += wreath_ore
         # Replace the client's wreath entries with server-built ones so the
         # receipt and the shop notification never show client-controlled text.
         data.orderData.items = [

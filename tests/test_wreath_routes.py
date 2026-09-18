@@ -126,3 +126,75 @@ async def test_design_image_rejects_non_uuid_without_touching_db(client):
         response = await client.get("/data/wreath/designs/not-a-uuid/image")
     assert response.status_code == 404
     get_image.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_design_image_has_nosniff(client):
+    with patch("routers.wreath_routes.get_wreath_design_image", new_callable=AsyncMock, return_value=_png()):
+        response = await client.get("/data/wreath/designs/123e4567-e89b-42d3-a456-426614174000/image")
+    assert response.status_code == 200
+    assert response.headers["x-content-type-options"] == "nosniff"
+
+
+# ── DB failures never leak exception text ─────────────────────────
+
+@pytest.mark.asyncio
+async def test_options_db_failure_is_500(client):
+    with patch(CATALOG_PATCH, new_callable=AsyncMock, side_effect=RuntimeError("db down")):
+        response = await client.get("/data/wreath/options")
+    assert response.status_code == 500
+    assert response.json()["detail"] == "Internal server error"
+
+
+@pytest.mark.asyncio
+async def test_create_design_db_failure_is_500(client):
+    with (
+        patch(CATALOG_PATCH, new_callable=AsyncMock, return_value=CATALOG),
+        patch(
+            "routers.wreath_routes.insert_wreath_design",
+            new_callable=AsyncMock,
+            side_effect=RuntimeError("db down"),
+        ),
+    ):
+        response = await client.post("/data/wreath/designs", json=_design_payload())
+    assert response.status_code == 500
+    assert response.json()["detail"] == "Internal server error"
+
+
+@pytest.mark.asyncio
+async def test_design_image_db_failure_is_500(client):
+    with patch(
+        "routers.wreath_routes.get_wreath_design_image",
+        new_callable=AsyncMock,
+        side_effect=RuntimeError("db down"),
+    ):
+        response = await client.get("/data/wreath/designs/123e4567-e89b-42d3-a456-426614174000/image")
+    assert response.status_code == 500
+    assert response.json()["detail"] == "Internal server error"
+
+
+# ── Rate limiting ─────────────────────────────────────────────────
+
+@pytest.fixture
+def fresh_design_limiter():
+    """Clear the in-memory rate-limit storage before and after, so this test
+    neither inherits hits from earlier POSTs nor leaves 20 hits for later ones."""
+    from routers.wreath_routes import limiter
+
+    limiter.reset()
+    yield limiter
+    limiter.reset()
+
+
+@pytest.mark.asyncio
+async def test_create_design_is_rate_limited(client, fresh_design_limiter):
+    with (
+        patch(CATALOG_PATCH, new_callable=AsyncMock, return_value=CATALOG),
+        patch("routers.wreath_routes.insert_wreath_design", new_callable=AsyncMock),
+    ):
+        statuses = [
+            (await client.post("/data/wreath/designs", json=_design_payload())).status_code
+            for _ in range(21)
+        ]
+    assert statuses[:20] == [200] * 20
+    assert statuses[20] == 429
