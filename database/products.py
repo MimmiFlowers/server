@@ -48,12 +48,25 @@ async def get_product_by_id(conn, product_id: int, preferred_langs: list[str]):
                           ) AS description,
                           p.price, p.stock, p.category,
                           c.name AS collection,
-                          p.image AS picture, p.contents
+                          p.image AS picture,
+                          -- contents holds flower codes; show their localised
+                          -- names in array order, the raw code if it has no
+                          -- row in `flowers` (db/init/06-flowers.sql).
+                          CASE WHEN p.contents IS NULL THEN NULL ELSE ARRAY(
+                              SELECT COALESCE(f.name ->> %s, f.name ->> %s, u.code)
+                              FROM unnest(p.contents) WITH ORDINALITY AS u(code, ord)
+                              LEFT JOIN flowers f ON f.code = u.code
+                              ORDER BY u.ord
+                          ) END AS contents
                    FROM products p
                    LEFT JOIN collections c
                           ON p."collectionID" = c."collectionID"
                    WHERE p."productID" = %s""",
-                (preferred_langs[0], preferred_langs[1], product_id),
+                (
+                    preferred_langs[0], preferred_langs[1],
+                    preferred_langs[0], preferred_langs[1],
+                    product_id,
+                ),
             )
             return await cur.fetchone()
     except Exception as e:

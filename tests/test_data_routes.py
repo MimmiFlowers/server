@@ -50,3 +50,41 @@ async def test_collections_endpoint(client, fake_conn):
     response = await client.get("/data/collections")
     assert response.status_code == 200
     assert "data" in response.json()
+
+
+class _RecordingCursor:
+    """Captures the SQL + params so the localisation wiring can be asserted."""
+
+    def __init__(self, sink: list):
+        self._sink = sink
+
+    async def execute(self, query: str, params=None):
+        self._sink.append((query, params))
+
+    async def fetchone(self):
+        return {"productID": 1, "name": "Endless Passion", "contents": ["Ros"]}
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *args):
+        pass
+
+
+@pytest.mark.asyncio
+async def test_product_contents_localised_from_flowers():
+    """get_product_by_id maps contents codes through `flowers` in the
+    requested language order (db/init/06-flowers.sql)."""
+    from database.products import get_product_by_id
+
+    calls: list = []
+    conn = FakeConnection()
+    conn.cursor = lambda: _RecordingCursor(calls)
+
+    row = await get_product_by_id(conn, 1, ["sv", "en"])
+
+    query, params = calls[0]
+    assert "LEFT JOIN flowers f ON f.code = u.code" in query
+    assert "WITH ORDINALITY" in query
+    assert params == ("sv", "en", "sv", "en", 1)
+    assert row["contents"] == ["Ros"]
