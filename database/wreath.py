@@ -5,10 +5,10 @@ from decimal import Decimal
 
 
 async def get_wreath_catalog(conn) -> dict:
-    """Every ACTIVE option row plus the size×material price matrix keyed by codes.
+    """Every ACTIVE option row plus the size×material bases (price + optional picture) keyed by codes.
 
     Shape (consumed by services.wreath):
-      {"sizes": [...], "materials": [...], "base_prices": [{"sizeCode","materialCode","price"}],
+      {"sizes": [...], "materials": [...], "bases": [{"sizeCode","materialCode","price","image"}],
        "bands": [...], "decorations": [...]}
     """
     try:
@@ -24,13 +24,13 @@ async def get_wreath_catalog(conn) -> dict:
             )
             materials = await cur.fetchall()
             await cur.execute(
-                'SELECT s.code AS "sizeCode", m.code AS "materialCode", p.price '
-                'FROM wreath_base_prices p '
-                'JOIN wreath_sizes s ON s."sizeID" = p."sizeID" '
-                'JOIN wreath_materials m ON m."materialID" = p."materialID" '
+                'SELECT s.code AS "sizeCode", m.code AS "materialCode", b.price, b.image '
+                'FROM wreath_bases b '
+                'JOIN wreath_sizes s ON s."sizeID" = b."sizeID" '
+                'JOIN wreath_materials m ON m."materialID" = b."materialID" '
                 'WHERE s.active AND m.active'
             )
-            base_prices = await cur.fetchall()
+            bases = await cur.fetchall()
             await cur.execute(
                 'SELECT code, name, image, price FROM wreath_bands '
                 'WHERE active ORDER BY "sortOrder", "bandID"'
@@ -44,7 +44,7 @@ async def get_wreath_catalog(conn) -> dict:
         return {
             "sizes": [dict(r) for r in sizes],
             "materials": [dict(r) for r in materials],
-            "base_prices": [dict(r) for r in base_prices],
+            "bases": [dict(r) for r in bases],
             "bands": [dict(r) for r in bands],
             "decorations": [dict(r) for r in decorations],
         }

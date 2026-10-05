@@ -27,10 +27,11 @@ CATALOG = {
         {"code": "fir", "name": {"en": "Fir", "sv": "Gran"}, "image": "/wreath/base-fir.svg"},
         {"code": "moss", "name": {"en": "Moss", "sv": "Mossa"}, "image": "/wreath/base-moss.svg"},
     ],
-    "base_prices": [
-        {"sizeCode": "s", "materialCode": "fir", "price": Decimal("299.00")},
-        {"sizeCode": "s", "materialCode": "moss", "price": Decimal("349.00")},
-        {"sizeCode": "m", "materialCode": "fir", "price": Decimal("399.00")},
+    "bases": [
+        {"sizeCode": "s", "materialCode": "fir", "price": Decimal("299.00"),
+         "image": "https://images-stg.mimmiflowers.se/wreath/base-s-fir.png"},
+        {"sizeCode": "s", "materialCode": "moss", "price": Decimal("349.00"), "image": None},
+        {"sizeCode": "m", "materialCode": "fir", "price": Decimal("399.00")},  # no image key at all
         # deliberately no (m, moss) row
     ],
     "bands": [
@@ -178,11 +179,13 @@ def test_order_item_uses_int_for_whole_sek_and_float_otherwise():
     assert order_item("abc", priced, 1, "en", has_image=True)["name"] == "Custom Christmas wreath"
 
 
-def test_catalog_for_client_resolves_language_and_nests_base_prices():
+def test_catalog_for_client_resolves_language_and_nests_bases():
     sv = catalog_for_client(CATALOG, "sv")
     assert sv["sizes"][0] == {"code": "s", "name": "Liten", "diameterCm": 25, "slotCount": 6}
     assert sv["materials"][1]["name"] == "Mossa"
     assert sv["basePrices"] == {"s": {"fir": 299.0, "moss": 349.0}, "m": {"fir": 399.0}}
+    # Only bases that have their own picture; the client falls back to the material image.
+    assert sv["baseImages"] == {"s": {"fir": "https://images-stg.mimmiflowers.se/wreath/base-s-fir.png"}}
     assert sv["bands"][0] == {"code": "red-velvet", "name": "Röd sammet", "image": "/wreath/band-red-velvet.svg", "price": 49.0}
     assert sv["decorations"][1]["name"] == "Stjärna" and sv["decorations"][1]["price"] == 25.0
     assert catalog_for_client(CATALOG, "en")["sizes"][0]["name"] == "Small"

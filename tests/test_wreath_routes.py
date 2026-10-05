@@ -28,6 +28,7 @@ async def test_options_resolves_language_and_flattens_prices(client):
     body = response.json()
     assert body["sizes"][0] == {"code": "s", "name": "Liten", "diameterCm": 25, "slotCount": 6}
     assert body["basePrices"]["s"]["fir"] == 299.0
+    assert body["baseImages"] == {"s": {"fir": "https://images-stg.mimmiflowers.se/wreath/base-s-fir.png"}}
     assert body["bands"][0]["price"] == 49.0
     assert body["decorations"][1]["name"] == "Stjärna"
 

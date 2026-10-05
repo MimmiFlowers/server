@@ -65,8 +65,8 @@ def validate_and_price(spec: WreathSpec, catalog: dict) -> dict:
     if material is None:
         raise WreathSpecError("Unknown wreath material")
     base = next(
-        (p for p in catalog["base_prices"]
-         if p["sizeCode"] == spec.sizeCode and p["materialCode"] == spec.materialCode),
+        (b for b in catalog["bases"]
+         if b["sizeCode"] == spec.sizeCode and b["materialCode"] == spec.materialCode),
         None,
     )
     if base is None:
@@ -168,8 +168,12 @@ def catalog_for_client(catalog: dict, locale: str) -> dict:
         return _names(row)[lang]
 
     base_prices: dict[str, dict[str, float]] = {}
-    for p in catalog["base_prices"]:
-        base_prices.setdefault(p["sizeCode"], {})[p["materialCode"]] = float(p["price"])
+    # Only bases with their own picture; the client falls back to the material's image.
+    base_images: dict[str, dict[str, str]] = {}
+    for b in catalog["bases"]:
+        base_prices.setdefault(b["sizeCode"], {})[b["materialCode"]] = float(b["price"])
+        if b.get("image"):
+            base_images.setdefault(b["sizeCode"], {})[b["materialCode"]] = b["image"]
 
     return {
         "sizes": [
@@ -180,6 +184,7 @@ def catalog_for_client(catalog: dict, locale: str) -> dict:
             {"code": m["code"], "name": name(m), "image": m["image"]} for m in catalog["materials"]
         ],
         "basePrices": base_prices,
+        "baseImages": base_images,
         "bands": [
             {"code": b["code"], "name": name(b), "image": b["image"], "price": float(b["price"])}
             for b in catalog["bands"]
