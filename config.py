@@ -68,6 +68,16 @@ class Settings:
     ZOHO_SMTP_PASSWORD: str = ""
     ZOHO_SMTP_SENDER_NAME: str = ""
 
+    # Cloudflare R2 (S3 API) — customer wreath designs are uploaded here.
+    # R2_PUBLIC_URL is the bucket's public custom domain (no trailing slash needed);
+    # R2_WREATH_DESIGNS_PREFIX is the key prefix, e.g. "wreaths/designs/".
+    R2_ACCOUNT_ID: str = ""
+    R2_ACCESS_KEY_ID: str = ""
+    R2_SECRET_ACCESS_KEY: str = ""
+    R2_BUCKET: str = ""
+    R2_PUBLIC_URL: str = ""
+    R2_WREATH_DESIGNS_PREFIX: str = ""
+
 
 # ---------------------------------------------------------------------------
 # 3. Build settings from environment and validate
@@ -118,8 +128,8 @@ CORS_ORIGINS: list[str] = [
 
 # SITE_URL: public origin of the shop, derived from SUCCESS_URL
 # ("https://stg.mimmiflowers.se/Success/" → "https://stg.mimmiflowers.se").
-# Used wherever an absolute URL must leave the server: wreath pictures in
-# emails, Telegram photos and Stripe line-item images.
+# Used wherever an absolute link to the shop must leave the server (e.g. the
+# "visit the shop" link in emails). Wreath pictures live on R2 (R2_PUBLIC_URL).
 _success = urlsplit(settings.SUCCESS_URL)
 if not _success.scheme or not _success.netloc:
     sys.exit(

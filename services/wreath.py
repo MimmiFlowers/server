@@ -12,7 +12,6 @@ import base64
 import struct
 from decimal import Decimal
 
-from config import SITE_URL
 from routers.classes.classes import WreathSpec
 
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
@@ -152,14 +151,6 @@ def decode_png_data_url(data_url: str) -> bytes:
     return raw
 
 
-def image_path(design_id: str) -> str:
-    return f"/data/wreath/designs/{design_id}/image"
-
-
-def image_url(design_id: str) -> str:
-    return f"{SITE_URL}{image_path(design_id)}"
-
-
 def catalog_for_client(catalog: dict, locale: str) -> dict:
     """Language-resolved, float-priced catalogue for GET /data/wreath/options."""
     lang = lang_for(locale)
@@ -196,7 +187,7 @@ def catalog_for_client(catalog: dict, locale: str) -> dict:
     }
 
 
-def order_item(design_id: str, priced: dict, quantity: int, locale: str, has_image: bool) -> dict:
+def order_item(design_id: str, priced: dict, quantity: int, locale: str, image_url: str | None) -> dict:
     """The server-built entry that replaces the client's wreath line in orders.items.
 
     `price` is SEK (like every other orders.items[].price); whole numbers stay ints
@@ -208,7 +199,7 @@ def order_item(design_id: str, priced: dict, quantity: int, locale: str, has_ima
         "name": DISPLAY_NAME[lang_for(locale)],
         "quantity": quantity,
         "price": int(price) if price == price.to_integral_value() else float(price),
-        "picture": image_url(design_id) if has_image else "",
+        "picture": image_url or "",
         "designID": design_id,
         "wreath": priced["summary"],
     }

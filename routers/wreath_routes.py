@@ -1,22 +1,20 @@
 """Wreath builder endpoints, mounted under /data so the client's nginx /data/ proxy covers them."""
 
 import logging
-import re
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Request
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
 from database.dbconfig.dbconfig import get_db_connection
-from database.wreath import get_wreath_catalog, get_wreath_design_image, insert_wreath_design
-from routers.classes.classes import UUID_PATTERN, WreathDesignRequest
+from database.wreath import get_wreath_catalog, insert_wreath_design
+from routers.classes.classes import WreathDesignRequest
+from services.r2 import design_key, upload_png
 from services.wreath import (
     WreathSpecError,
     catalog_for_client,
     decode_png_data_url,
-    image_path,
-    image_url,
     validate_and_price,
 )
 
@@ -29,9 +27,6 @@ router = APIRouter(
     tags=["wreath"],
     responses={404: {"description": "Not found"}},
 )
-
-_UUID_RE = re.compile(UUID_PATTERN)
-
 
 @router.get("/options")
 async def get_options(request: Request, conn=Depends(get_db_connection)):
@@ -48,10 +43,12 @@ async def get_options(request: Request, conn=Depends(get_db_connection)):
 @router.post("/designs")
 @limiter.limit("20/minute")
 async def create_design(request: Request, data: WreathDesignRequest, conn=Depends(get_db_connection)):
-    """Validate + price a design, store it (with the customer's PNG) and return its ID.
+    """Validate + price a design, upload the customer's PNG to R2, store the design
+    with the picture's public URL and return its ID.
 
     The returned price is informational for the cart; checkout re-prices from the
-    live tables and never trusts the client.
+    live tables and never trusts the client. If the upload fails the design is still
+    saved, without a picture — the same outcome as a failed export in the browser.
     """
     try:
         catalog = await get_wreath_catalog(conn)
@@ -66,8 +63,15 @@ async def create_design(request: Request, data: WreathDesignRequest, conn=Depend
         raise HTTPException(status_code=400, detail=str(e))
 
     design_id = str(uuid.uuid4())
+    image_url = None
+    if image is not None:
+        try:
+            image_url = await upload_png(design_key(design_id), image)
+        except Exception as e:
+            logger.error("Failed to upload wreath image %s to R2: %s", design_id, e)
+
     try:
-        await insert_wreath_design(conn, design_id, data.spec.model_dump(), priced["price"], image)
+        await insert_wreath_design(conn, design_id, data.spec.model_dump(), priced["price"], image_url)
     except Exception as e:
         logger.error("Failed to store wreath design: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -75,29 +79,7 @@ async def create_design(request: Request, data: WreathDesignRequest, conn=Depend
     return {
         "designID": design_id,
         "price": float(priced["price"]),
-        "imagePath": image_path(design_id) if image else None,
-        "imageUrl": image_url(design_id) if image else None,
+        "imageUrl": image_url,
         "summary": priced["summary"],
     }
 
-
-@router.get("/designs/{design_id}/image")
-async def get_design_image(design_id: str, conn=Depends(get_db_connection)):
-    """The customer's rendered PNG. UUIDs are unguessable, so no auth; cached forever."""
-    if not _UUID_RE.match(design_id):
-        raise HTTPException(status_code=404, detail="Not found")
-    try:
-        image = await get_wreath_design_image(conn, design_id)
-    except Exception as e:
-        logger.error("Failed to load wreath image %s: %s", design_id, e)
-        raise HTTPException(status_code=500, detail="Internal server error")
-    if image is None:
-        raise HTTPException(status_code=404, detail="Not found")
-    return Response(
-        content=image,
-        media_type="image/png",
-        headers={
-            "Cache-Control": "public, max-age=31536000, immutable",
-            "X-Content-Type-Options": "nosniff",
-        },
-    )

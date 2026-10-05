@@ -35,4 +35,10 @@ jobs:
           ZOHO_SMTP_USER: test@example.com
           ZOHO_SMTP_PASSWORD: testpass
           ZOHO_SMTP_SENDER_NAME: Test
+          R2_ACCOUNT_ID: test-account
+          R2_ACCESS_KEY_ID: test-key
+          R2_SECRET_ACCESS_KEY: test-secret
+          R2_BUCKET: test-bucket
+          R2_PUBLIC_URL: https://images.test
+          R2_WREATH_DESIGNS_PREFIX: wreaths/test/designs/
         run: python -m pytest tests/ -v

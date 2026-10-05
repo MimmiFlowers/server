@@ -19,7 +19,6 @@ from services.wreath import (
     DISPLAY_NAME,
     WreathSpecError,
     describe_summary,
-    image_url,
     lang_for,
     validate_and_price,
 )
@@ -91,8 +90,8 @@ async def _price_wreath_lines(conn, wreath_items, locale: str) -> tuple[list[dic
             "name": DISPLAY_NAME[lang],
             "description": describe_summary(priced["summary"], lang)[:_STRIPE_DESCRIPTION_MAX],
         }
-        picture = image_url(item.designID)
-        if design["hasImage"] and picture.startswith("https://"):
+        picture = design["imageUrl"]
+        if picture and picture.startswith("https://"):
             product_data["images"] = [picture]  # Stripe must be able to fetch it publicly
         line_items.append({
             "price_data": {
@@ -103,7 +102,7 @@ async def _price_wreath_lines(conn, wreath_items, locale: str) -> tuple[list[dic
             "quantity": item.quantity,
         })
         order_entries.append(
-            wreath_order_item(item.designID, priced, item.quantity, locale, design["hasImage"])
+            wreath_order_item(item.designID, priced, item.quantity, locale, design["imageUrl"])
         )
     return line_items, order_entries, subtotal_ore
 

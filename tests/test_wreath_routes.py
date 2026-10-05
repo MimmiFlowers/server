@@ -40,25 +40,35 @@ async def test_options_defaults_to_english(client):
     assert response.json()["sizes"][0]["name"] == "Small"
 
 
+UPLOAD_PATCH = "routers.wreath_routes.upload_png"
+
+
+async def _fake_upload(key: str, data: bytes) -> str:
+    return f"https://images.test/{key}"
+
+
 @pytest.mark.asyncio
-async def test_create_design_stores_server_price_and_image(client):
+async def test_create_design_uploads_png_to_r2_and_stores_its_url(client):
     with (
         patch(CATALOG_PATCH, new_callable=AsyncMock, return_value=CATALOG),
+        patch(UPLOAD_PATCH, new_callable=AsyncMock, side_effect=_fake_upload) as upload,
         patch("routers.wreath_routes.insert_wreath_design", new_callable=AsyncMock) as insert,
     ):
         response = await client.post("/data/wreath/designs", json=_design_payload())
     assert response.status_code == 200
     body = response.json()
     assert body["price"] == 363.0  # 299 + 49 + 15
-    assert body["imagePath"] == f"/data/wreath/designs/{body['designID']}/image"
-    assert body["imageUrl"] == f"http://localhost:3000/data/wreath/designs/{body['designID']}/image"
+    expected_url = f"https://images.test/wreaths/test/designs/{body['designID']}.png"
+    assert body["imageUrl"] == expected_url
+    assert "imagePath" not in body
     assert body["summary"]["decorations"] == [{"slot": 1, "en": "Pine cone", "sv": "Kotte"}]
+    upload.assert_awaited_once_with(f"wreaths/test/designs/{body['designID']}.png", _png())
     insert.assert_awaited_once()
-    _, design_id, spec, price, image = insert.await_args.args
+    _, design_id, spec, price, image_url = insert.await_args.args
     assert design_id == body["designID"]
     assert spec["decorations"] == [{"slot": 0, "code": "pine-cone"}]
     assert str(price) == "363.00"
-    assert image == _png()
+    assert image_url == expected_url
 
 
 @pytest.mark.asyncio
@@ -67,11 +77,26 @@ async def test_create_design_without_image(client):
     del payload["image"]
     with (
         patch(CATALOG_PATCH, new_callable=AsyncMock, return_value=CATALOG),
+        patch(UPLOAD_PATCH, new_callable=AsyncMock) as upload,
         patch("routers.wreath_routes.insert_wreath_design", new_callable=AsyncMock) as insert,
     ):
         response = await client.post("/data/wreath/designs", json=payload)
     assert response.status_code == 200
-    assert response.json()["imagePath"] is None
+    assert response.json()["imageUrl"] is None
+    upload.assert_not_awaited()
+    assert insert.await_args.args[4] is None
+
+
+@pytest.mark.asyncio
+async def test_create_design_survives_an_r2_failure_without_a_picture(client):
+    """Like a failed browser export: the design (and the order) still go through."""
+    with (
+        patch(CATALOG_PATCH, new_callable=AsyncMock, return_value=CATALOG),
+        patch(UPLOAD_PATCH, new_callable=AsyncMock, side_effect=RuntimeError("R2 down")),
+        patch("routers.wreath_routes.insert_wreath_design", new_callable=AsyncMock) as insert,
+    ):
+        response = await client.post("/data/wreath/designs", json=_design_payload())
+    assert response.status_code == 200
     assert response.json()["imageUrl"] is None
     assert insert.await_args.args[4] is None
 
@@ -90,9 +115,13 @@ async def test_create_design_rejects_bad_slot(client):
 async def test_create_design_rejects_bad_image(client):
     payload = _design_payload()
     payload["image"] = "data:image/jpeg;base64,AAAA"
-    with patch(CATALOG_PATCH, new_callable=AsyncMock, return_value=CATALOG):
+    with (
+        patch(CATALOG_PATCH, new_callable=AsyncMock, return_value=CATALOG),
+        patch(UPLOAD_PATCH, new_callable=AsyncMock) as upload,
+    ):
         response = await client.post("/data/wreath/designs", json=payload)
     assert response.status_code == 400
+    upload.assert_not_awaited()  # never upload what failed validation
 
 
 @pytest.mark.asyncio
@@ -101,40 +130,6 @@ async def test_create_design_rejects_malformed_spec(client):
     del payload["spec"]["sizeCode"]
     response = await client.post("/data/wreath/designs", json=payload)
     assert response.status_code == 422
-
-
-@pytest.mark.asyncio
-async def test_design_image_found(client):
-    design_id = "123e4567-e89b-42d3-a456-426614174000"
-    with patch("routers.wreath_routes.get_wreath_design_image", new_callable=AsyncMock, return_value=_png()):
-        response = await client.get(f"/data/wreath/designs/{design_id}/image")
-    assert response.status_code == 200
-    assert response.headers["content-type"] == "image/png"
-    assert "immutable" in response.headers["cache-control"]
-    assert response.content == _png()
-
-
-@pytest.mark.asyncio
-async def test_design_image_missing(client):
-    with patch("routers.wreath_routes.get_wreath_design_image", new_callable=AsyncMock, return_value=None):
-        response = await client.get("/data/wreath/designs/123e4567-e89b-42d3-a456-426614174000/image")
-    assert response.status_code == 404
-
-
-@pytest.mark.asyncio
-async def test_design_image_rejects_non_uuid_without_touching_db(client):
-    with patch("routers.wreath_routes.get_wreath_design_image", new_callable=AsyncMock) as get_image:
-        response = await client.get("/data/wreath/designs/not-a-uuid/image")
-    assert response.status_code == 404
-    get_image.assert_not_awaited()
-
-
-@pytest.mark.asyncio
-async def test_design_image_has_nosniff(client):
-    with patch("routers.wreath_routes.get_wreath_design_image", new_callable=AsyncMock, return_value=_png()):
-        response = await client.get("/data/wreath/designs/123e4567-e89b-42d3-a456-426614174000/image")
-    assert response.status_code == 200
-    assert response.headers["x-content-type-options"] == "nosniff"
 
 
 # ── DB failures never leak exception text ─────────────────────────
@@ -158,18 +153,6 @@ async def test_create_design_db_failure_is_500(client):
         ),
     ):
         response = await client.post("/data/wreath/designs", json=_design_payload())
-    assert response.status_code == 500
-    assert response.json()["detail"] == "Internal server error"
-
-
-@pytest.mark.asyncio
-async def test_design_image_db_failure_is_500(client):
-    with patch(
-        "routers.wreath_routes.get_wreath_design_image",
-        new_callable=AsyncMock,
-        side_effect=RuntimeError("db down"),
-    ):
-        response = await client.get("/data/wreath/designs/123e4567-e89b-42d3-a456-426614174000/image")
     assert response.status_code == 500
     assert response.json()["detail"] == "Internal server error"
 
@@ -199,3 +182,10 @@ async def test_create_design_is_rate_limited(client, fresh_design_limiter):
         ]
     assert statuses[:20] == [200] * 20
     assert statuses[20] == 429
+
+
+@pytest.mark.asyncio
+async def test_design_image_endpoint_is_gone(client):
+    """Pictures are served by R2 now; the old server endpoint must not linger."""
+    response = await client.get("/data/wreath/designs/123e4567-e89b-42d3-a456-426614174000/image")
+    assert response.status_code in (404, 405)

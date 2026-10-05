@@ -23,7 +23,7 @@ def _order(locale: str) -> dict:
         "orderForMyself": True,
         "items": [{
             "name": "Custom Christmas wreath", "quantity": 1, "price": 354,
-            "picture": "https://stg.mimmiflowers.se/data/wreath/designs/x/image",
+            "picture": "https://images-stg.mimmiflowers.se/wreaths/designs/x.png",
             "designID": "x", "wreath": WREATH,
         }],
         "subtotal": 35400, "deliveryFee": 9900, "total": 45300, "moms": 9060,

@@ -19,10 +19,16 @@ os.environ.update({
     "ZOHO_SMTP_USER": "test@example.com",
     "ZOHO_SMTP_PASSWORD": "testpass",
     "ZOHO_SMTP_SENDER_NAME": "Test",
+    "R2_ACCOUNT_ID": "test-account",
+    "R2_ACCESS_KEY_ID": "test-key",
+    "R2_SECRET_ACCESS_KEY": "test-secret",
+    "R2_BUCKET": "test-bucket",
+    "R2_PUBLIC_URL": "https://images.test",
+    "R2_WREATH_DESIGNS_PREFIX": "wreaths/test/designs/",
 })
 
 from collections.abc import AsyncGenerator  # noqa: E402
-from unittest.mock import AsyncMock, MagicMock  # noqa: E402
+from unittest.mock import AsyncMock, MagicMock, patch  # noqa: E402
 
 import pytest  # noqa: E402
 from httpx import AsyncClient, ASGITransport  # noqa: E402
@@ -67,6 +73,13 @@ class FakeConnection:
 
     async def rollback(self):
         pass
+
+
+@pytest.fixture(autouse=True)
+def _no_real_r2():
+    """No test may talk to Cloudflare: every boto3 client is a MagicMock unless a test patches it."""
+    with patch("services.r2._client", return_value=MagicMock()):
+        yield
 
 
 @pytest.fixture

@@ -157,7 +157,7 @@ def _wreath_design_row() -> dict:
             "decorations": [{"slot": 0, "code": "pine-cone"}],
         },
         "price": Decimal("363.00"),
-        "hasImage": True,
+        "imageUrl": f"https://images.test/wreaths/test/designs/{DESIGN_ID}.png",
     }
 
 
@@ -199,7 +199,7 @@ async def test_checkout_prices_wreath_from_design_not_client(client):
     assert wreath_item["price"] == 363
     assert wreath_item["quantity"] == 2
     assert wreath_item["designID"] == DESIGN_ID
-    assert wreath_item["picture"] == f"http://localhost:3000/data/wreath/designs/{DESIGN_ID}/image"
+    assert wreath_item["picture"] == f"https://images.test/wreaths/test/designs/{DESIGN_ID}.png"
     assert wreath_item["wreath"]["decorations"] == [{"slot": 1, "en": "Pine cone", "sv": "Kotte"}]
 
 
@@ -308,7 +308,7 @@ async def test_checkout_two_different_designs(client):
         "spec": {"sizeCode": "m", "materialCode": "fir", "bandCode": None,
                  "decorations": [{"slot": 2, "code": "star"}]},
         "price": Decimal("424.00"),
-        "hasImage": False,
+        "imageUrl": None,
     }
     rows = {DESIGN_ID: _wreath_design_row(), other_id: other_row}
     payload = _wreath_only_payload(True, DESIGN_ID, other_id)
@@ -335,14 +335,13 @@ async def test_checkout_two_different_designs(client):
 @pytest.mark.asyncio
 async def test_checkout_wreath_image_attached_only_over_https(client):
     """Stripe fetches product images itself, so only a public https URL is passed on."""
-    https_url = "https://stg.example/x.png"
+    https_url = "https://images.test/wreaths/test/designs/x.png"
 
     async def _checkout(row: dict) -> dict:
         with (
             patch("routers.stripe_routes.get_product_prices_by_names", new_callable=AsyncMock, return_value={}),
             patch("routers.stripe_routes.get_wreath_catalog", new_callable=AsyncMock, return_value=CATALOG),
             patch("routers.stripe_routes.get_wreath_design", new_callable=AsyncMock, return_value=row),
-            patch("routers.stripe_routes.image_url", return_value=https_url),
             patch("routers.stripe_routes.insert_order", new_callable=AsyncMock),
             patch("routers.stripe_routes.stripe.checkout.Session.create", return_value=_mock_stripe_session()) as create,
         ):
@@ -352,11 +351,16 @@ async def test_checkout_wreath_image_attached_only_over_https(client):
         assert response.status_code == 200
         return create.call_args.kwargs["line_items"][0]["price_data"]["product_data"]
 
-    product_data = await _checkout(_wreath_design_row())
+    row = _wreath_design_row()
+    row["imageUrl"] = https_url
+    product_data = await _checkout(row)
     assert product_data["images"] == [https_url]
 
-    row = _wreath_design_row()
-    row["hasImage"] = False
+    row["imageUrl"] = None
+    product_data = await _checkout(row)
+    assert "images" not in product_data
+
+    row["imageUrl"] = "http://localhost:9000/x.png"
     product_data = await _checkout(row)
     assert "images" not in product_data
 

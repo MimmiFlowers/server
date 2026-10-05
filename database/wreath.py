@@ -54,16 +54,16 @@ async def get_wreath_catalog(conn) -> dict:
 
 
 async def insert_wreath_design(
-    conn, design_id: str, spec: dict, price: Decimal, image: bytes | None
+    conn, design_id: str, spec: dict, price: Decimal, image_url: str | None
 ) -> None:
     """design_id is minted by the caller (uuid4 in the router), spec is the validated
-    `WreathSpec.model_dump()`, price is SEK."""
+    `WreathSpec.model_dump()`, price is SEK, image_url the PNG's public R2 URL (or None)."""
     try:
         async with conn.cursor() as cur:
             await cur.execute(
-                'INSERT INTO wreath_designs ("designID", spec, price, image) '
+                'INSERT INTO wreath_designs ("designID", spec, price, "imageUrl") '
                 'VALUES (%s::uuid, %s::jsonb, %s, %s)',
-                (design_id, json.dumps(spec), price, image),
+                (design_id, json.dumps(spec), price, image_url),
             )
         await conn.commit()
     except Exception as e:
@@ -72,12 +72,11 @@ async def insert_wreath_design(
 
 
 async def get_wreath_design(conn, design_id: str) -> dict | None:
-    """Spec + stored price + whether an image exists. Never loads the image bytes."""
+    """Spec + stored price + the picture's public URL (None if there is no picture)."""
     try:
         async with conn.cursor() as cur:
             await cur.execute(
-                'SELECT "designID"::text AS "designID", spec, price, '
-                '(image IS NOT NULL) AS "hasImage" '
+                'SELECT "designID"::text AS "designID", spec, price, "imageUrl" '
                 'FROM wreath_designs WHERE "designID" = %s::uuid',
                 (design_id,),
             )
@@ -87,20 +86,3 @@ async def get_wreath_design(conn, design_id: str) -> dict | None:
         await conn.rollback()
         raise e
 
-
-async def get_wreath_design_image(conn, design_id: str) -> bytes | None:
-    """PNG bytes for GET /data/wreath/designs/{id}/image, or None if the design or
-    its image is missing."""
-    try:
-        async with conn.cursor() as cur:
-            await cur.execute(
-                'SELECT image FROM wreath_designs WHERE "designID" = %s::uuid',
-                (design_id,),
-            )
-            row = await cur.fetchone()
-        if not row or row["image"] is None:
-            return None
-        return row["image"]  # psycopg 3 already returns bytea as bytes
-    except Exception as e:
-        await conn.rollback()
-        raise e

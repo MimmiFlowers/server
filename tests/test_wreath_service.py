@@ -162,21 +162,21 @@ def test_rejects_png_whose_first_chunk_is_not_ihdr():
 
 def test_order_item_uses_int_for_whole_sek_and_float_otherwise():
     priced = validate_and_price(_spec(), CATALOG)
-    item = order_item("abc", priced, 2, "sv-SE", has_image=True)
+    item = order_item("abc", priced, 2, "sv-SE", image_url="https://images.test/wreaths/test/designs/abc.png")
     assert item == {
         "id": "wreath-abc",
         "name": "Egen julkrans",
         "quantity": 2,
         "price": 378,
-        "picture": "http://localhost:3000/data/wreath/designs/abc/image",
+        "picture": "https://images.test/wreaths/test/designs/abc.png",
         "designID": "abc",
         "wreath": priced["summary"],
     }
     assert isinstance(item["price"], int)
     fractional = {"price": Decimal("299.50"), "summary": priced["summary"]}
-    assert order_item("abc", fractional, 1, "en", has_image=False)["price"] == 299.5
-    assert order_item("abc", fractional, 1, "en", has_image=False)["picture"] == ""
-    assert order_item("abc", priced, 1, "en", has_image=True)["name"] == "Custom Christmas wreath"
+    assert order_item("abc", fractional, 1, "en", image_url=None)["price"] == 299.5
+    assert order_item("abc", fractional, 1, "en", image_url=None)["picture"] == ""
+    assert order_item("abc", priced, 1, "en", image_url="https://images.test/wreaths/test/designs/abc.png")["name"] == "Custom Christmas wreath"
 
 
 def test_catalog_for_client_resolves_language_and_nests_bases():
